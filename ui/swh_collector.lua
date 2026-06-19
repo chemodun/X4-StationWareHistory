@@ -351,6 +351,18 @@ function swh.init()
   RegisterEvent("StationWareHistory.DebugLevelChanged", swh.onDebugLevelChanged)
 
   debugLog("init: playerId=%s debugLevel=%s.", tostring(swh.playerId), swh.debugLevel)
+
+  -- Run an immediate collection pass on every load/start, not just on the next periodic
+  -- MD timer tick (up to collectionIntervalMinutes away). Without this, the station-name
+  -- cache (swh.stations, runtime-only -- rebuilt fresh each onCollect) stays empty right
+  -- after a save/load while the persisted ware-history data (swh.data) already has
+  -- entries from prior sessions, so the menu's station dropdown shows those stations as
+  -- idcode-only until the first periodic tick fires.
+  -- onCollect() has no enabled-check of its own (the MD timer cue gates that before
+  -- raising the event), so mirror the same condition here rather than bypassing it.
+  if root ~= nil and root.config ~= nil and (root.config.enabled == true or root.config.enabled == 1) then
+    swh.onCollect()
+  end
 end
 
 Register_Require_With_Init("extensions.station_ware_history.ui.swh_collector", swh, swh.init)
