@@ -1,0 +1,300 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mdscript name="Station_Ware_History"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../libraries/md.xsd">
+  <!--
+    Station Ware History — Options / timer / interaction-menu integration.
+
+    Config table keys (all under player.entity.$stationWareHistory.$config):
+      $enabled                   — bool (checkbox): master switch; when false the timer
+                                    never raises the Lua collection event at all
+      $collectionIntervalMinutes — int 1..10  (slider): how often Lua samples station cargo
+      $retentionHours            — int 10..120 (slider): how long samples are kept before pruning
+      $debugLevel                — string: 'none' | 'debug' | 'trace'
+
+    player.entity.$stationWareHistory.$lastCollectionTime — player.age of the last
+    raised collection event; compared every tick against the configured interval.
+    The actual ware data lives separately, on player.entity.$stationWareHistoryData,
+    owned and pruned entirely by ui/swh_collector.lua (kept off this table so the
+    options menu never has to round-trip the — potentially large — history series).
+  -->
+
+  <cues>
+
+    <cue name="Init" instantiate="false" version="1">
+      <actions>
+        <set_value name="$debugLevelIndexes" exact="['none', 'debug', 'trace']" />
+      </actions>
+      <cues>
+
+        <!-- Default config values -->
+        <library name="SWH_Defaults" purpose="include_actions">
+          <actions>
+            <set_value name="$cfg" exact="table[
+              $enabled                    = true,
+              $collectionIntervalMinutes  = 5,
+              $retentionHours             = 48,
+              $debugLevel                 = 'none',
+            ]" />
+          </actions>
+        </library>
+
+        <!-- Sets $debugChance (100 unless debugLevel == 'none') and $traceChance
+             (100 only when debugLevel == 'trace') from the current config.
+             Caller must remove_value both when done. -->
+        <library name="SWH_ReadDebugChances" purpose="include_actions">
+          <actions>
+            <set_value name="$swhDebugLevel" exact="if @player.entity.$stationWareHistory.$config.$debugLevel != null
+              then player.entity.$stationWareHistory.$config.$debugLevel else 'none'" />
+            <set_value name="$debugChance" exact="if $swhDebugLevel == 'none' then 0 else 100" />
+            <set_value name="$traceChance" exact="if $swhDebugLevel == 'trace' then 100 else 0" />
+            <remove_value name="$swhDebugLevel" />
+          </actions>
+        </library>
+
+        <!-- *** Options menu registration *** -->
+        <cue name="SWH_Register_Menu" instantiate="true" version="1">
+          <conditions>
+            <event_cue_signalled cue="md.Simple_Menu_API.Reloaded" />
+          </conditions>
+          <actions>
+            <include_actions ref="SWH_Defaults" />
+            <do_if value="@player.entity.$stationWareHistory == null">
+              <set_value name="player.entity.$stationWareHistory" exact="table[
+                $config             = null,
+                $lastCollectionTime = null,
+              ]" />
+            </do_if>
+            <do_if value="@player.entity.$stationWareHistory.$config == null">
+              <set_value name="player.entity.$stationWareHistory.$config" exact="$cfg" />
+            </do_if>
+            <do_else>
+              <!-- Back-fill any keys missing from an older save -->
+              <do_for_each name="$k" in="$cfg">
+                <do_if value="@player.entity.$stationWareHistory.$config.{$k} == null">
+                  <set_value name="player.entity.$stationWareHistory.$config.{$k}"
+                    exact="$cfg.{$k}" />
+                </do_if>
+              </do_for_each>
+            </do_else>
+            <remove_value name="$cfg" />
+
+            <signal_cue_instantly cue="md.Simple_Menu_API.Register_Options_Menu"
+              param="table[
+                $id      = 'station_ware_history_options_menu',
+                $columns = 12,
+                $title   = {1972092430, 1},
+                $onOpen  = SWH_Options_Menu,
+              ]" />
+          </actions>
+        </cue>
+
+        <!-- *** Options menu open callback *** -->
+        <cue name="SWH_Options_Menu" instantiate="true" version="1">
+          <conditions>
+            <event_cue_signalled />
+          </conditions>
+          <actions>
+            <do_if value="@player.entity.$stationWareHistory.$config != null">
+              <set_value name="$cfg" exact="player.entity.$stationWareHistory.$config" />
+
+              <!-- Master switch, shown above everything else -->
+              <include_actions ref="md.Options_Helper.Add_Empty_Row" />
+              <run_actions ref="md.Options_Helper.Add_Checkbox">
+                <param name="id" value="'enabled'" />
+                <param name="col" value="1" />
+                <param name="textColSpan" value="11" />
+                <param name="text" value="{1972092430, 90001}" />
+                <param name="data" value="$cfg" />
+                <param name="handle" value="SWH_HandleCheckbox" />
+              </run_actions>
+
+              <include_actions ref="md.Options_Helper.Add_Empty_Row" />
+              <run_actions ref="md.Options_Helper.Add_Title_Row">
+                <param name="title" value="{1972092430, 90100}" />
+              </run_actions>
+
+              <!-- Collection interval (1-10 min, default 5) -->
+              <run_actions ref="md.Options_Helper.Add_Slider">
+                <param name="id" value="'collectionIntervalMinutes'" />
+                <param name="min" value="1" />
+                <param name="max" value="10" />
+                <param name="step" value="1" />
+                <param name="text" value="{1972092430, 90101}" />
+                <param name="suffix" value="' min'" />
+                <param name="colSpan" value="8" />
+                <param name="textColSpan" value="4" />
+                <param name="data" value="$cfg" />
+                <param name="handle" value="SWH_HandleSlider" />
+              </run_actions>
+
+              <!-- Retention period (10-120 h, default 48) -->
+              <run_actions ref="md.Options_Helper.Add_Slider">
+                <param name="id" value="'retentionHours'" />
+                <param name="min" value="10" />
+                <param name="max" value="120" />
+                <param name="step" value="2" />
+                <param name="text" value="{1972092430, 90102}" />
+                <param name="suffix" value="' h'" />
+                <param name="colSpan" value="8" />
+                <param name="textColSpan" value="4" />
+                <param name="data" value="$cfg" />
+                <param name="handle" value="SWH_HandleSlider" />
+              </run_actions>
+
+              <!-- Section: Debug -->
+              <include_actions ref="md.Options_Helper.Add_Empty_Row" />
+              <run_actions ref="md.Options_Helper.Add_Title_Row">
+                <param name="title" value="{1972092430, 90200}" />
+              </run_actions>
+
+              <set_value name="$debugLevelOptions" exact="[
+                table[$text = {1972092430, 90211}, $value = 'none'],
+                table[$text = {1972092430, 90212}, $value = 'debug'],
+                table[$text = {1972092430, 90213}, $value = 'trace']
+              ]" />
+              <set_value name="$debugLevelCurrentIndex"
+                exact="$debugLevelIndexes.indexof.{@$cfg.$debugLevel}" />
+              <do_if value="$debugLevelCurrentIndex == 0">
+                <set_value name="$debugLevelCurrentIndex" exact="1" />
+              </do_if>
+
+              <run_actions ref="md.Options_Helper.Add_Dropdown">
+                <param name="id" value="'debugLevel'" />
+                <param name="options" value="$debugLevelOptions" />
+                <param name="currentIndex" value="$debugLevelCurrentIndex" />
+                <param name="col" value="1" />
+                <param name="textColSpan" value="6" />
+                <param name="text" value="{1972092430, 90210}" />
+                <param name="dropdownColSpan" value="6" />
+                <param name="handle" value="SWH_HandleDropdown" />
+              </run_actions>
+              <remove_value name="$debugLevelOptions" />
+              <remove_value name="$debugLevelCurrentIndex" />
+
+              <remove_value name="$cfg" />
+            </do_if>
+          </actions>
+        </cue>
+
+        <!-- *** Checkbox handler *** -->
+        <cue name="SWH_HandleCheckbox" instantiate="true" version="1">
+          <conditions>
+            <event_cue_signalled />
+          </conditions>
+          <actions>
+            <set_value name="$resultTable" exact="player.entity.$stationWareHistory.$config" />
+            <include_actions ref="md.Options_Helper.Process_Checkbox_Changed" />
+            <remove_value name="$resultTable" />
+          </actions>
+        </cue>
+
+        <!-- *** Dropdown handler *** -->
+        <cue name="SWH_HandleDropdown" instantiate="true" version="1">
+          <conditions>
+            <event_cue_signalled />
+          </conditions>
+          <actions>
+            <set_value name="$resultTable" exact="player.entity.$stationWareHistory.$config" />
+            <include_actions ref="md.Options_Helper.Process_Dropdown_Changed" />
+            <remove_value name="$resultTable" />
+            <do_if value="event.param.$echo.$valueId == '$debugLevel'">
+              <raise_lua_event name="'StationWareHistory.DebugLevelChanged'"
+                param="player.entity.$stationWareHistory.$config.$debugLevel" />
+            </do_if>
+          </actions>
+        </cue>
+
+        <!-- *** Slider handler *** -->
+        <cue name="SWH_HandleSlider" instantiate="true" version="1">
+          <conditions>
+            <event_cue_signalled />
+          </conditions>
+          <actions>
+            <set_value name="$resultTable" exact="player.entity.$stationWareHistory.$config" />
+            <include_actions ref="md.Options_Helper.Process_Slider_Changed" />
+            <remove_value name="$resultTable" />
+          </actions>
+        </cue>
+
+        <!-- *** Collection timer ***
+             Ticks every 60s (the finest granularity the interval slider allows) and
+             raises the Lua collection event once the configured interval has elapsed.
+             Comparing elapsed time against a live config value (rather than using a
+             variable checkinterval, which MD evaluates only once at cue-enable time)
+             keeps the slider responsive without restarting the cue. -->
+        <cue name="SWH_Collection_Timer" instantiate="true" checkinterval="60s">
+          <actions>
+            <do_if value="@player.entity.$stationWareHistory != null and @player.entity.$stationWareHistory.$config != null">
+              <include_actions ref="SWH_ReadDebugChances" />
+              <set_value name="$root" exact="player.entity.$stationWareHistory" />
+              <do_if value="@$root.$lastCollectionTime == null">
+                <set_value name="$root.$lastCollectionTime" exact="player.age" />
+              </do_if>
+              <set_value name="$intervalMinutes" exact="$root.$config.$collectionIntervalMinutes" />
+              <do_if value="player.age ge ($root.$lastCollectionTime + ($intervalMinutes)min)">
+                <set_value name="$root.$lastCollectionTime" exact="player.age" />
+                <do_if value="@$root.$config.$enabled == true or @$root.$config.$enabled == 1">
+                  <debug_text text="'StationWareHistory: SWH_Collection_Timer firing collection (interval=%s min).'.[$intervalMinutes]"
+                    chance="$debugChance" filter="general" />
+                  <raise_lua_event name="'StationWareHistory.Collect'" />
+                </do_if>
+                <do_else>
+                  <debug_text text="'StationWareHistory: SWH_Collection_Timer skipped, collection disabled.'"
+                    chance="$traceChance" filter="general" />
+                </do_else>
+              </do_if>
+              <remove_value name="$root" />
+              <remove_value name="$intervalMinutes" />
+              <remove_value name="$debugChance" />
+              <remove_value name="$traceChance" />
+            </do_if>
+          </actions>
+        </cue>
+
+        <!-- *** Interaction menu: "Show Ware History" on player-owned stations ***
+             Re-registered every time an interact menu opens, per Interact_Menu_API
+             convention (actions are not persistent across menu opens). -->
+        <cue name="SWH_Add_Interact_Action" instantiate="true" version="1">
+          <conditions>
+            <event_cue_signalled cue="md.Interact_Menu_API.Get_Actions" />
+          </conditions>
+          <actions>
+            <include_actions ref="SWH_ReadDebugChances" />
+            <set_value name="$target" exact="event.param.$object" />
+            <do_if value="$target != null and $target.isclass.{class.station} and $target.trueowner == faction.player">
+              <debug_text text="'StationWareHistory: SWH_Add_Interact_Action adding action for station %s.'.[$target.debugname]"
+                chance="$traceChance" filter="general" />
+              <signal_cue_instantly cue="md.Interact_Menu_API.Add_Action"
+                param="table[
+                  $id       = 'station_ware_history_show',
+                  $text     = {1972092430, 1004},
+                  $section  = 'main',
+                  $callback = SWH_Interact_Callback,
+                ]" />
+            </do_if>
+            <remove_value name="$target" />
+            <remove_value name="$debugChance" />
+            <remove_value name="$traceChance" />
+          </actions>
+        </cue>
+
+        <cue name="SWH_Interact_Callback" instantiate="true" version="1">
+          <conditions>
+            <event_cue_signalled />
+          </conditions>
+          <actions>
+            <include_actions ref="SWH_ReadDebugChances" />
+            <debug_text text="'StationWareHistory: SWH_Interact_Callback opening menu for station %s.'.[event.param.$object.debugname]"
+              chance="$debugChance" filter="general" />
+            <raise_lua_event name="'StationWareHistory.OpenMenu'" param="event.param.$object" />
+            <remove_value name="$debugChance" />
+            <remove_value name="$traceChance" />
+          </actions>
+        </cue>
+
+      </cues>
+    </cue>
+
+  </cues>
+</mdscript>

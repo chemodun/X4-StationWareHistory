@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<addon name="station_ware_history" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="../core/addon.xsd">
+    <environment type="menus">
+        <dependency name="sn_mod_support_apis" />
+        <dependency name="ego_detailmonitor" />
+        <file name="ui/swh_collector.lua" />
+        <file name="ui/swh_history_menu.lua" />
+    </environment>
+</addon>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<content
+    id=""
+    name="Station Ware History"
+    author="Chem O`Dun"
+    version="100"
+    date="2026-06-20"
+    save="false"
+    sync="false"
+    description="Periodically samples ware stock on every player-owned station and lets you graph the history per station, with a configurable sampling interval and retention window. Access via the station's right-click interaction menu.">
+
+</content>
