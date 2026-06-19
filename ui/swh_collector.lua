@@ -247,11 +247,11 @@ function swh.onCollect()
   for i = 1, #stationsList do
     local stationLuaId = stationsList[i]
     local id64                       = ConvertIDTo64Bit(stationLuaId)
-    local idcode, name, sectorLuaId  = GetComponentData(stationLuaId, "idcode", "name", "sectorid")
+    local idcode, name, sector, sectorLuaId  = GetComponentData(stationLuaId, "idcode", "name", "sector", "sectorid")
     if idcode ~= nil then
       stationsSeen[idcode] = true
       swh.stations[idcode] = {
-        name       = name,
+        name       = name .. " (" .. idcode .. ") - " .. sector,
         sectorName = GetComponentData(sectorLuaId, "name"),
         luaId      = stationLuaId,
       }
