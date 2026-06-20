@@ -252,15 +252,16 @@
           </conditions>
           <actions>
             <include_actions ref="SWH_ReadDebugChances" />
-            <set_value name="$collectionEnabled" exact="@player.entity.$stationWareHistory.$config.$enabled == true
-              or @player.entity.$stationWareHistory.$config.$enabled == 1" />
-            <set_value name="$confirmed" exact="@player.entity.$stationWareHistory.$confirmClear == true
-              or @player.entity.$stationWareHistory.$confirmClear == 1" />
+            <set_value name="$cfg" exact="player.entity.$stationWareHistory.$config" />
+            <set_value name="$collectionEnabled" exact="@$cfg.$enabled == true
+              or @$cfg.$enabled == 1" />
+            <set_value name="$confirmed" exact="@$cfg.$confirmClear == true
+              or @$cfg.$confirmClear == 1" />
             <do_if value="$confirmed and not $collectionEnabled">
               <debug_text text="'[SWH]: SWH_HandleClearData clearing all collected data.'"
                 chance="$debugChance" filter="scripts" />
-              <remove_value name="player.entity.$stationWareHistoryData" />
-              <set_value name="player.entity.$stationWareHistory.$confirmClear" exact="false" />
+              <raise_lua_event name="'StationWareHistory.ClearData'" />
+              <set_value name="$cfg.$confirmClear" exact="false" />
               <signal_cue_instantly cue="md.Simple_Menu_API.Refresh_Menu" />
             </do_if>
             <do_else>
