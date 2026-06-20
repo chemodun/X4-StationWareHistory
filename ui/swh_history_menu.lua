@@ -452,23 +452,41 @@ end
 
 -- *** Menu lifecycle ***
 
+-- Clamps a candidate zoom interval into [zoomMinimumMinutes, maxRangeMinutes].
+-- Shared by the fresh-station default (anchored to config.zoomDefaultMinutes)
+-- and the dropdown-switch reapply (anchored to whatever zoom was already
+-- selected) -- same clamp, different anchor.
+local function clampZoomMinutes(candidateMinutes, maxRangeMinutes)
+  return math.max(config.zoomMinimumMinutes, math.min(candidateMinutes, maxRangeMinutes))
+end
+
 -- Default zoom for the (newly) selected station: 1h, unless its actual
 -- recorded history is shorter, in which case use that instead (still floored
 -- at zoomMinimumMinutes).
 local function setDefaultZoomForStation()
   local maxRange = computeStationMaxRangeMinutes(menu.selectedIdcode, C.GetCurrentGameTime())
-  menu.zoomMinutes = math.max(config.zoomMinimumMinutes, math.min(config.zoomDefaultMinutes, maxRange))
+  menu.zoomMinutes = clampZoomMinutes(config.zoomDefaultMinutes, maxRange)
 end
 
+-- Opening the menu fresh (via the interaction menu or the right side bar) on
+-- the same station it last showed restores exactly what was left selected
+-- (zoom, display mode, shown wares -- menu.cleanup() never clears these, so
+-- they're still sitting on the menu table from before); a different station
+-- (or the very first open this session) resets to defaults for it instead.
 function menu.onShowMenu()
   local stationId64 = menu.param[3]
-  menu.selectedIdcode = nil
+  local newIdcode = nil
   if stationId64 ~= nil and stationId64 ~= 0 then
-    menu.selectedIdcode = GetComponentData(stationId64, "idcode")
+    newIdcode = GetComponentData(stationId64, "idcode")
   end
-  menu.shownWares = {}
-  menu.dataMode = config.defaultDataMode
-  setDefaultZoomForStation()
+
+  if newIdcode ~= menu.selectedIdcode or menu.shownWares == nil then
+    menu.selectedIdcode = newIdcode
+    menu.shownWares = {}
+    menu.dataMode = config.defaultDataMode
+    setDefaultZoomForStation()
+  end
+
   menu.createFrame()
 end
 
@@ -481,11 +499,31 @@ function menu.refreshInfoFrame()
   menu.createFrame()
 end
 
+-- Switching station via the dropdown (menu already open) deliberately does
+-- NOT reset display mode or zoom -- both are reapplied to the new station:
+-- dataMode carries over unchanged (nothing to clamp, any mode is valid for
+-- any station), and zoom is re-clamped against the new station's own data
+-- range rather than reset to a freshly computed default. Shown wares are
+-- kept only where they actually exist on the new station; anything else is
+-- dropped (never added -- the kept set can only shrink, so it can't exceed
+-- the unchanged ware-count cap).
 function menu.buttonStationSelected(_, idcode)
   if idcode ~= menu.selectedIdcode then
     menu.selectedIdcode = idcode
-    menu.shownWares = {}
-    setDefaultZoomForStation()
+
+    local maxRange = computeStationMaxRangeMinutes(idcode, C.GetCurrentGameTime())
+    menu.zoomMinutes = clampZoomMinutes(menu.zoomMinutes, maxRange)
+
+    local wareSet = {}
+    for _, wareId in ipairs(swh.getWaresForStation(idcode)) do
+      wareSet[wareId] = true
+    end
+    for wareId in pairs(menu.shownWares) do
+      if not wareSet[wareId] then
+        menu.shownWares[wareId] = nil
+      end
+    end
+
     menu.refreshInfoFrame()
   end
 end
