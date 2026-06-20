@@ -77,7 +77,7 @@ local swh = {
   -- it survives save/reload; read by swh_history_menu.lua to anchor the graph's
   -- right edge on the last time data was actually gathered rather than on
   -- "right now", since collection can be left disabled indefinitely.
-  lastGatheredTime = 0,
+  lastGatheredTime = 0.0,
 }
 
 -- *** debug helpers ***
@@ -116,6 +116,7 @@ end
 
 local function loadFromBlackboard()
   swh.data = GetNPCBlackboard(swh.playerId, "$stationWareHistoryData") or {}
+  swh.lastGatheredTime = tonumber(GetNPCBlackboard(swh.playerId, "$stationWareHistoryLastGathered")) or 0.0
 end
 
 local function saveToBlackboard()
