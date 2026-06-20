@@ -71,6 +71,13 @@ local swh = {
   isV9       = C.GetGameVersion().major >= 9,
   data       = {},  -- data[stationIdcode][wareId] = { {t=,real=,res=}, ... }
   stations   = {},  -- stations[stationIdcode] = { name=, sectorName=, luaId= }; rebuilt every collect
+  -- Game time of the last successful onCollect() run -- distinct from MD's
+  -- $lastCollectionTime, which tracks when the timer last fired/checked the
+  -- interval regardless of whether $enabled was true. Persisted separately so
+  -- it survives save/reload; read by swh_history_menu.lua to anchor the graph's
+  -- right edge on the last time data was actually gathered rather than on
+  -- "right now", since collection can be left disabled indefinitely.
+  lastGatheredTime = 0,
 }
 
 -- *** debug helpers ***
@@ -112,7 +119,8 @@ local function loadFromBlackboard()
 end
 
 local function saveToBlackboard()
-  SetNPCBlackboard(swh.playerId, "$stationWareHistoryData", swh.data)
+  SetNPCBlackboard(swh.playerId, "$stationWareHistoryData", next(swh.data) ~= nil and swh.data or nil)
+  SetNPCBlackboard(swh.playerId, "$stationWareHistoryLastGathered", swh.lastGatheredTime)
 end
 
 -- *** data collection ***
@@ -312,8 +320,26 @@ function swh.onCollect()
   end
 
   pruneAll(now)
+  swh.lastGatheredTime = now
   saveToBlackboard()
   debugLog("onCollect: done, %d ware sample(s) processed.", wareSamples)
+end
+
+-- Wipes all recorded history for every station and persists the empty result
+-- immediately. Triggered from the options menu's "Clear Data" button, which
+-- is itself only clickable while data collection is disabled -- so there's no
+-- onCollect() running concurrently that could resurrect anything right after.
+-- Also clears the live station-name cache and lastGatheredTime so the menu's
+-- station dropdown goes empty right away rather than showing stale names with
+-- nothing underneath them.
+function swh.onClearData()
+  local stationCount = 0
+  for _ in pairs(swh.data) do stationCount = stationCount + 1 end
+  swh.data = {}
+  swh.stations = {}
+  swh.lastGatheredTime = 0
+  saveToBlackboard()
+  debugLog("onClearData: cleared history for %d station(s).", stationCount)
 end
 
 -- *** queries for the menu ***
@@ -383,6 +409,7 @@ function swh.init()
   swh.playerId = ConvertStringTo64Bit(tostring(C.GetPlayerID()))
   swh.onDebugLevelChanged()
   loadFromBlackboard()
+  swh.lastGatheredTime = tonumber(GetNPCBlackboard(swh.playerId, "$stationWareHistoryLastGathered")) or 0
 
   -- Initial debug level (written by the options menu into
   -- player.entity.$stationWareHistory.$config.$debugLevel); kept in sync afterwards
@@ -394,6 +421,7 @@ function swh.init()
 
   RegisterEvent("StationWareHistory.Collect", swh.onCollect)
   RegisterEvent("StationWareHistory.DebugLevelChanged", swh.onDebugLevelChanged)
+  RegisterEvent("StationWareHistory.ClearData", swh.onClearData)
 
   debugLog("init: playerId=%s debugLevel=%s.", tostring(swh.playerId), swh.debugLevel)
 

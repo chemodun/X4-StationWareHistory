@@ -24,6 +24,7 @@
             <t id="1021">Unavailable while 3 or more wares are selected.</t>
             <t id="1022">Real</t>
             <t id="1023">Reserved</t>
+            <t id="1026">No data collected within the selected time range. Try "Show More".</t>
 
             <!-- Master switch (90001) -->
             <t id="90001">Enable Data Collection</t>

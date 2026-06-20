@@ -270,8 +270,16 @@ end
 -- Builds the full-fidelity {x=,y=} point list for one change-only series within
 -- the visible window, adding the same two carry-forward anchors as before
 -- (left edge = most recent known value at/before the window start; right edge =
--- latest known value carried to "now") so the line stays continuous even though
--- most wares only get a new stored point when their value actually changes.
+-- latest known value carried to swh.lastGatheredTime) so the line stays
+-- continuous even though most wares only get a new stored point when their
+-- value actually changes.
+-- The axis itself is always anchored on real/live time (ctx.now, "show
+-- more"/"show less" always mean what they literally say), but the rightmost
+-- plotted point on every line sits at swh.lastGatheredTime, not at "now": if
+-- collection has been disabled for a while, the line should visibly stop
+-- short of the right edge rather than implying data is still current. When
+-- collection is active, lastGatheredTime is effectively "now" anyway, so this
+-- is a strict generalization of the old always-anchor-at-0 behaviour.
 -- Does not touch the graph widget directly -- see decimatePoints()/fairShareCaps()
 -- below for how the result is (optionally) downsampled before being plotted, to
 -- stay under the graph's total point budget.
@@ -300,9 +308,13 @@ local function buildPoints(series, ctx, valueKey)
     end
   end
 
+  local lastGatheredX = 0
+  if swh.lastGatheredTime and swh.lastGatheredTime > 0 then
+    lastGatheredX = (swh.lastGatheredTime - ctx.now) / ctx.graphXScale
+  end
   local lastX = (#points > 0) and points[#points].x or nil
-  if lastX == nil or lastX < 0 then
-    points[#points + 1] = { x = 0, y = series[#series][valueKey] }
+  if lastX == nil or lastX < lastGatheredX then
+    points[#points + 1] = { x = lastGatheredX, y = series[#series][valueKey] }
   end
   return points
 end
@@ -457,6 +469,10 @@ end
 -- Time-window context for the current "show less"/"show more" interval,
 -- shared by the left panel (checkbox-availability point count) and the graph
 -- panel (actual plotting), so both agree on exactly the same window/scale.
+-- The axis is always anchored on real/live time (ctx.now) -- "show
+-- more"/"show less" always mean exactly what they say, regardless of when
+-- data was last collected. What moves instead is the rightmost plotted point
+-- on each line (see buildPoints(), anchored at swh.lastGatheredTime).
 local function buildZoomContext()
   local now = C.GetCurrentGameTime()
   local startTime = math.max(0, now - (60 * menu.zoomMinutes))
@@ -473,13 +489,25 @@ local function buildZoomContext()
     xUnitSuffix = "h"
   end
 
+  -- If the last gathered sample itself falls before the window's left edge,
+  -- there's nothing within the current zoom recent enough to draw at all --
+  -- collection has been off for longer than the visible window covers.
+  -- "Show more" (a wider window) is what brings it back into range. Data
+  -- collection can be left disabled indefinitely (the options menu's master
+  -- switch), so this can't be assumed to never happen.
+  local hasRecentData = true
+  if swh.lastGatheredTime and swh.lastGatheredTime > 0 then
+    hasRecentData = swh.lastGatheredTime >= startTime
+  end
+
   return {
-    startTime    = startTime,
-    now          = now,
-    graphXScale  = graphXScale,
-    xRange       = (now - startTime) / graphXScale,
-    xGranularity = xGranularity,
-    xUnitSuffix  = xUnitSuffix,
+    startTime     = startTime,
+    now           = now,
+    hasRecentData = hasRecentData,
+    graphXScale   = graphXScale,
+    xRange        = (now - startTime) / graphXScale,
+    xGranularity  = xGranularity,
+    xUnitSuffix   = xUnitSuffix,
   }
 end
 
@@ -788,7 +816,17 @@ function menu.createGraphPanel(x, width, ctx)
   local graphHeight = math.floor(width * 9 / 16)
   local table_graph = menu.infoFrame:addTable(1, { tabOrder = 2, width = width, x = x, y = Helper.frameBorder })
 
-  local title = (menu.selectedIdcode ~= nil) and swh.getStationName(menu.selectedIdcode) or ""
+  local title
+  if menu.selectedIdcode == nil then
+    title = ""
+  elseif not ctx.hasRecentData then
+    -- Nothing within range of the current zoom -- see buildZoomContext()'s
+    -- hasRecentData comment. Shown instead of the station name so it's
+    -- obvious why the graph is empty even with wares checked.
+    title = ReadText(1972092430, 1026)
+  else
+    title = swh.getStationName(menu.selectedIdcode)
+  end
 
   local row = table_graph:addRow(false, { fixed = true })
   menu.graph = row[1]:createGraph({ height = graphHeight, scaling = false })
@@ -799,8 +837,9 @@ function menu.createGraphPanel(x, width, ctx)
   -- within the graph's shared point budget (config.maxTotalPoints, across all
   -- lines combined -- not per line). In "both" mode each shown ware produces
   -- two lines (key="real" and key="res"), each counted/capped independently.
+  -- Skipped entirely while ctx.hasRecentData is false (see above).
   local lines = {}
-  if menu.selectedIdcode ~= nil then
+  if menu.selectedIdcode ~= nil and ctx.hasRecentData then
     local keys = (menu.dataMode == "both") and { "real", "res" } or { menu.dataMode }
     for wareId in pairs(menu.shownWares) do
       local series = swh.getSeries(menu.selectedIdcode, wareId)
