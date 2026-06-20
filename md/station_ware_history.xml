@@ -46,8 +46,7 @@
           <actions>
             <set_value name="$swhDebugLevel" exact="if @player.entity.$stationWareHistory.$config.$debugLevel != null
               then player.entity.$stationWareHistory.$config.$debugLevel else 'none'" />
-            <set_value name="$debugChance" exact="if $swhDebugLevel == 'none' then 0 else 100" />
-            <set_value name="$traceChance" exact="if $swhDebugLevel == 'trace' then 100 else 0" />
+            <set_value name="$debugChance" exact="if @$swhDebugLevel == null or @$swhDebugLevel == 'none' then 0 else 100" />
             <remove_value name="$swhDebugLevel" />
           </actions>
         </library>
@@ -95,12 +94,16 @@
             <event_cue_signalled />
           </conditions>
           <actions>
+            <include_actions ref="SWH_ReadDebugChances" />
             <do_if value="@player.entity.$stationWareHistory.$config != null">
               <set_value name="$cfg" exact="player.entity.$stationWareHistory.$config" />
               <!-- Reset every time the options page is opened, so a stale
                    confirmation never survives to the next visit. -->
               <set_value name="player.entity.$stationWareHistory.$confirmClear" exact="false" />
               <set_value name="$collectionDisabled" exact="not (@$cfg.$enabled == true or @$cfg.$enabled == 1)" />
+              <do_if value="$collectionDisabled" negate="true">
+                <set_value name="$cfg.$confirmClear" exact="false" />
+              </do_if>
 
               <run_actions ref="md.Options_Helper.Add_Title_Row">
                 <param name="title" value="{1972092430, 90100}" />
@@ -155,15 +158,25 @@
                 <param name="title" value="{1972092430, 90300}" />
               </run_actions>
 
+              <set_value name="$confirmClearDataActive" exact="$collectionDisabled and @player.entity.$stationWareHistoryData != null" />
+              <debug_text text="'[SWH] SWH_Options_Menu: Clear Data controls active:%s where collectionDisabled=%s and stationWareHistoryData=%s'.
+                [$confirmClearDataActive, $collectionDisabled, @player.entity.$stationWareHistoryData != null]"
+                chance="$debugChance" filter="scripts" />
+
               <run_actions ref="md.Options_Helper.Add_Checkbox">
                 <param name="id" value="'confirmClear'" />
                 <param name="col" value="1" />
                 <param name="textColSpan" value="11" />
                 <param name="text" value="{1972092430, 90310}" />
-                <param name="data" value="player.entity.$stationWareHistory" />
-                <param name="active" value="$collectionDisabled" />
-                <param name="handle" value="SWH_HandleConfirmClearCheckbox" />
+                <param name="data" value="$cfg" />
+                <param name="active" value="$confirmClearDataActive" />
+                <param name="handle" value="SWH_HandleCheckbox" />
               </run_actions>
+
+              <set_value name="$buttonClearDataActive" exact="$confirmClearDataActive and (@$cfg.$confirmClear == true or @$cfg.$confirmClear == 1)" />
+              <debug_text text="'[SWH] SWH_Options_Menu: Clear Data button active:%s where confirmClearDataActive=%s and confirmed=%s'.
+                [$buttonClearDataActive, $confirmClearDataActive, @$cfg.$confirmClear == true or @$cfg.$confirmClear == 1]"
+                chance="$debugChance" filter="scripts" />
 
               <run_actions ref="md.Options_Helper.Add_Button">
                 <param name="id" value="'clearData'" />
@@ -172,11 +185,12 @@
                 <param name="text" value="{1972092430, 90311}" />
                 <param name="buttonColSpan" value="3" />
                 <param name="buttonText" value="{1972092430, 90312}" />
-                <param name="active" value="$collectionDisabled" />
+                <param name="active" value="$buttonClearDataActive" />
                 <param name="handle" value="SWH_HandleClearData" />
               </run_actions>
 
-              <remove_value name="$collectionDisabled" />
+              <remove_value name="$confirmClearDataActive" />
+              <remove_value name="$buttonClearDataActive" />
 
               <!-- Section: Debug -->
               <include_actions ref="md.Options_Helper.Add_Empty_Row" />
@@ -221,21 +235,7 @@
           <actions>
             <set_value name="$resultTable" exact="player.entity.$stationWareHistory.$config" />
             <include_actions ref="md.Options_Helper.Process_Checkbox_Changed" />
-            <remove_value name="$resultTable" />
-          </actions>
-        </cue>
-
-        <!-- *** Clear Data: confirmation checkbox handler ***
-             $confirmClear lives directly on player.entity.$stationWareHistory
-             (not inside $config: it's transient UI state, reset to false
-             every time the options page opens, not a saved setting). -->
-        <cue name="SWH_HandleConfirmClearCheckbox" instantiate="true" version="1">
-          <conditions>
-            <event_cue_signalled />
-          </conditions>
-          <actions>
-            <set_value name="$resultTable" exact="player.entity.$stationWareHistory" />
-            <include_actions ref="md.Options_Helper.Process_Checkbox_Changed" />
+            <signal_cue_instantly cue="md.Simple_Menu_API.Refresh_Menu" />
             <remove_value name="$resultTable" />
           </actions>
         </cue>
@@ -257,15 +257,15 @@
             <set_value name="$confirmed" exact="@player.entity.$stationWareHistory.$confirmClear == true
               or @player.entity.$stationWareHistory.$confirmClear == 1" />
             <do_if value="$confirmed and not $collectionEnabled">
-              <debug_text text="'StationWareHistory: SWH_HandleClearData clearing all collected data.'"
-                chance="$debugChance" filter="general" />
-              <raise_lua_event name="'StationWareHistory.ClearData'" />
+              <debug_text text="'[SWH]: SWH_HandleClearData clearing all collected data.'"
+                chance="$debugChance" filter="scripts" />
+              <remove_value name="player.entity.$stationWareHistoryData" />
               <set_value name="player.entity.$stationWareHistory.$confirmClear" exact="false" />
               <signal_cue_instantly cue="md.Simple_Menu_API.Refresh_Menu" />
             </do_if>
             <do_else>
-              <debug_text text="'StationWareHistory: SWH_HandleClearData ignored (confirmed=%s, collectionEnabled=%s).'.[$confirmed, $collectionEnabled]"
-                chance="$traceChance" filter="general" />
+              <debug_text text="'[SWH]: SWH_HandleClearData ignored (confirmed=%s, collectionEnabled=%s).'.[$confirmed, $collectionEnabled]"
+                chance="$traceChance" filter="scripts" />
             </do_else>
             <remove_value name="$collectionEnabled" />
             <remove_value name="$confirmed" />
@@ -320,13 +320,13 @@
               <do_if value="player.age ge ($root.$lastCollectionTime + ($intervalMinutes)min)">
                 <set_value name="$root.$lastCollectionTime" exact="player.age" />
                 <do_if value="@$root.$config.$enabled == true or @$root.$config.$enabled == 1">
-                  <debug_text text="'StationWareHistory: SWH_Collection_Timer firing collection (interval=%s min).'.[$intervalMinutes]"
-                    chance="$debugChance" filter="general" />
+                  <debug_text text="'[SWH]: SWH_Collection_Timer firing collection (interval=%s min).'.[$intervalMinutes]"
+                    chance="$debugChance" filter="scripts" />
                   <raise_lua_event name="'StationWareHistory.Collect'" />
                 </do_if>
                 <do_else>
-                  <debug_text text="'StationWareHistory: SWH_Collection_Timer skipped, collection disabled.'"
-                    chance="$traceChance" filter="general" />
+                  <debug_text text="'[SWH]: SWH_Collection_Timer skipped, collection disabled.'"
+                    chance="$traceChance" filter="scripts" />
                 </do_else>
               </do_if>
               <remove_value name="$root" />
@@ -348,8 +348,8 @@
             <include_actions ref="SWH_ReadDebugChances" />
             <set_value name="$target" exact="event.param.$object" />
             <do_if value="$target != null and $target.isclass.{class.station} and $target.trueowner == faction.player">
-              <debug_text text="'StationWareHistory: SWH_Add_Interact_Action adding action for station %s.'.[$target.debugname]"
-                chance="$traceChance" filter="general" />
+              <debug_text text="'[SWH]: SWH_Add_Interact_Action adding action for station %s.'.[$target.debugname]"
+                chance="$traceChance" filter="scripts" />
               <signal_cue_instantly cue="md.Interact_Menu_API.Add_Action"
                 param="table[
                   $id       = 'station_ware_history_show',
@@ -370,8 +370,8 @@
           </conditions>
           <actions>
             <include_actions ref="SWH_ReadDebugChances" />
-            <debug_text text="'StationWareHistory: SWH_Interact_Callback opening menu for station %s.'.[event.param.$object.debugname]"
-              chance="$debugChance" filter="general" />
+            <debug_text text="'[SWH]: SWH_Interact_Callback opening menu for station %s.'.[event.param.$object.debugname]"
+              chance="$debugChance" filter="scripts" />
             <raise_lua_event name="'StationWareHistory.OpenMenu'" param="event.param.$object" />
             <remove_value name="$debugChance" />
             <remove_value name="$traceChance" />
