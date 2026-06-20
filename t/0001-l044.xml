@@ -17,6 +17,13 @@
             <t id="1014">No wares with recorded history on this station.</t>
             <t id="1015">Amount</t>
             <t id="1016">Select a station to view its ware history.</t>
+            <t id="1017">Display</t>
+            <t id="1018">Real Amount</t>
+            <t id="1019">With Reservations</t>
+            <t id="1020">Both</t>
+            <t id="1021">Unavailable while 3 or more wares are selected.</t>
+            <t id="1022">Real</t>
+            <t id="1023">Reserved</t>
 
             <!-- Master switch (90001) -->
             <t id="90001">Enable Data Collection</t>

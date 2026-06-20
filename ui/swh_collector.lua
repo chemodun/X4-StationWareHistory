@@ -2,17 +2,22 @@
 --
 -- MD raises 'StationWareHistory.Collect' on a configurable timer
 -- (player.entity.$stationWareHistory.$config.$collectionIntervalMinutes, 1-10 min).
--- On each collection, samples reservation-corrected cargo for every player-owned
--- station and appends change-only points to a per-station/per-ware time series,
--- persisted on player.entity.$stationWareHistoryData so it survives save/reload.
+-- On each collection, samples cargo for every player-owned station -- both the
+-- raw stock amount and the reservation-corrected amount -- and appends
+-- change-only points to a per-station/per-ware time series, persisted on
+-- player.entity.$stationWareHistoryData so it survives save/reload.
 --
--- Series shape: data[stationIdcode][wareId] = { {t=gameTime, v=amount}, ... },
--- ordered by t ascending. A new point is appended only when the value differs
--- from the series' last point (mirrors vanilla's transaction-log money-graph
--- compaction in ego_detailmonitorhelper/helper.lua, which only keeps a point when
--- money differs from the previous/next sample). This keeps the table small even
--- at the finest interval/longest retention, since most wares on most stations sit
--- at a stable level between deliveries.
+-- Series shape: data[stationIdcode][wareId] = { {t=gameTime, real=rawAmount,
+-- res=reservationCorrectedAmount}, ... }, ordered by t ascending. Both values
+-- are stored on every point (not just the one currently displayed) since which
+-- one the menu shows is a per-session display choice, not a collection-time
+-- one -- switching the display mode in the menu must not require re-collecting
+-- history that's already been gathered. A new point is appended only when
+-- either value differs from the series' last point (mirrors vanilla's
+-- transaction-log money-graph compaction in ego_detailmonitorhelper/helper.lua,
+-- which only keeps a point when money differs from the previous/next sample).
+-- This keeps the table small even at the finest interval/longest retention,
+-- since most wares on most stations sit at a stable level between deliveries.
 --
 -- Pruning (run once per collection cycle, after sampling) drops points older than
 -- the configured retention window, except it always keeps the single most recent
@@ -54,7 +59,7 @@ ffi.cdef [[
 local swh = {
   playerId   = nil,
   debugLevel = "debug",
-  data       = {},  -- data[stationIdcode][wareId] = { {t=,v=}, ... }
+  data       = {},  -- data[stationIdcode][wareId] = { {t=,real=,res=}, ... }
   stations   = {},  -- stations[stationIdcode] = { name=, sectorName=, luaId= }; rebuilt every collect
 }
 
@@ -132,20 +137,27 @@ local function relevantWareSet(objId64)
   return wareSet
 end
 
--- Reservation-corrected cargo table for one container: buy reservations remove
--- stock about to leave, sell reservations add stock about to arrive. Mirrors
--- sfd_engine.lua's processOffers cargo correction, applied to the whole cargo
--- table rather than only to wares with an active trade offer. Every ware in
--- wareSet gets an entry (defaulting to 0) even if absent from "cargo" or any
--- reservation, so zero-stock production wares are still tracked.
-local function correctedCargo(objId64, wareSet)
-  local cargoTable = {}
+-- Samples both the raw and the reservation-corrected cargo amount for one
+-- container: buy reservations remove stock about to leave, sell reservations
+-- add stock about to arrive. Mirrors sfd_engine.lua's processOffers cargo
+-- correction, applied to the whole cargo table rather than only to wares with
+-- an active trade offer. Every ware in wareSet gets an entry in both tables
+-- (defaulting to 0) even if absent from "cargo" or any reservation, so
+-- zero-stock production wares are still tracked.
+-- Returns rawTable, correctedTable (both wareId -> amount).
+local function sampleCargo(objId64, wareSet)
+  local rawTable = {}
   for wareId in pairs(wareSet) do
-    cargoTable[wareId] = 0
+    rawTable[wareId] = 0
   end
   local cargo = GetComponentData(objId64, "cargo")
   for wareId, amount in pairs(cargo or {}) do
-    cargoTable[wareId] = tonumber(amount) or 0
+    rawTable[wareId] = tonumber(amount) or 0
+  end
+
+  local correctedTable = {}
+  for wareId, amount in pairs(rawTable) do
+    correctedTable[wareId] = amount
   end
 
   local nRes = tonumber(C.GetNumContainerWareReservations2(objId64, true, true, true))
@@ -156,20 +168,20 @@ local function correctedCargo(objId64, wareSet)
       if (not resBuf[ri].isvirtual) and resBuf[ri].missionid == 0 then
         local wareId  = ffi.string(resBuf[ri].ware)
         local resAmt  = tonumber(resBuf[ri].amount) or 0
-        local current = cargoTable[wareId] or 0
+        local current = correctedTable[wareId] or 0
         if resBuf[ri].isbuyreservation then
-          cargoTable[wareId] = math.max(0, current - resAmt)
+          correctedTable[wareId] = math.max(0, current - resAmt)
         else
-          cargoTable[wareId] = current + resAmt
+          correctedTable[wareId] = current + resAmt
         end
       end
     end
   end
 
-  return cargoTable
+  return rawTable, correctedTable
 end
 
-local function appendPoint(stationIdcode, wareId, now, amount)
+local function appendPoint(stationIdcode, wareId, now, realAmount, resAmount)
   local stationSeries = swh.data[stationIdcode]
   if stationSeries == nil then
     stationSeries = {}
@@ -181,10 +193,11 @@ local function appendPoint(stationIdcode, wareId, now, amount)
     stationSeries[wareId] = series
   end
   local last = series[#series]
-  if last == nil or last.v ~= amount then
-    series[#series + 1] = { t = now, v = amount }
-    traceLog("appendPoint: station=%s ware=%s amount=%d (was %s) -> new point recorded.",
-      stationIdcode, wareId, amount, last and tostring(last.v) or "none")
+  if last == nil or last.real ~= realAmount or last.res ~= resAmount then
+    series[#series + 1] = { t = now, real = realAmount, res = resAmount }
+    traceLog("appendPoint: station=%s ware=%s real=%d res=%d (was real=%s res=%s) -> new point recorded.",
+      stationIdcode, wareId, realAmount, resAmount,
+      last and tostring(last.real) or "none", last and tostring(last.res) or "none")
   end
 end
 
@@ -257,10 +270,10 @@ function swh.onCollect()
       }
 
       local wareSet = relevantWareSet(id64)
-      local cargoTable = correctedCargo(id64, wareSet)
+      local rawTable, correctedTable = sampleCargo(id64, wareSet)
       local stationWareCount = 0
-      for wareId, amount in pairs(cargoTable) do
-        appendPoint(idcode, wareId, now, amount)
+      for wareId in pairs(wareSet) do
+        appendPoint(idcode, wareId, now, rawTable[wareId] or 0, correctedTable[wareId] or 0)
         stationWareCount = stationWareCount + 1
       end
       wareSamples = wareSamples + stationWareCount

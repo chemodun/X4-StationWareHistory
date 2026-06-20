@@ -31,7 +31,7 @@
         <library name="SWH_Defaults" purpose="include_actions">
           <actions>
             <set_value name="$cfg" exact="table[
-              $enabled                    = true,
+              $enabled                    = false,
               $collectionIntervalMinutes  = 5,
               $retentionHours             = 48,
               $debugLevel                 = 'none',

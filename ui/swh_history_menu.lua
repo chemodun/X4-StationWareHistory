@@ -54,8 +54,10 @@ local config = {
     { zoom = 7200, granularity = 3600 * 12,    label = nil },  -- last step always shows "All"
   },
   defaultZoom  = 3,  -- 24h
-  maxShownWares = 8,    -- hard cap: one per available graph_data_N color
+  defaultDataMode = "res", -- "real" | "res" | "both" -- see dataMode dropdown
+  maxShownWares = 8,    -- hard cap on simultaneous LINES: one per available graph_data_N color
   maxTotalPoints = 200, -- shared budget across every currently shown line; see fairShareCaps()
+  maxYRoundTo = 1000,   -- the Y axis' endvalue is always rounded up to a multiple of this
   -- Checkbox availability (separate from maxTotalPoints/fairShareCaps, which only
   -- decide how to downsample once something is already shown): below
   -- wareCountSoftLimit shown wares, unchecked checkboxes always stay clickable;
@@ -63,9 +65,16 @@ local config = {
   -- wares' combined full-fidelity point count reaches wareSelectionPointsBudget
   -- (leaving headroom under maxTotalPoints before decimation would kick in for
   -- one more line); at maxShownWares, unchecked checkboxes are always disabled,
-  -- no point counting needed.
+  -- no point counting needed. Both thresholds are WARE counts in "real"/"res"
+  -- mode (1 line/ware); in "both" mode each ware costs 2 lines, so the
+  -- effective ware-count thresholds are halved -- see effectiveWareCaps().
   wareCountSoftLimit       = 5,
   wareSelectionPointsBudget = 160,
+  -- "Both" mode is unavailable (disabled in the dropdown) once this many wares
+  -- are already selected, regardless of effectiveWareCaps() -- a simple,
+  -- conservative guard against confusing combinations rather than a precise
+  -- feasibility check.
+  bothModeMaxWaresToOffer = 2,
   seriesColors = {
     Color["graph_data_1"], Color["graph_data_2"], Color["graph_data_3"], Color["graph_data_4"],
     Color["graph_data_5"], Color["graph_data_6"], Color["graph_data_7"], Color["graph_data_8"],
@@ -97,7 +106,8 @@ end
 
 -- Stable colour per ware: index into the full (sorted) ware list for the
 -- selected station, not into the selection order, so a ware keeps its colour
--- across checkbox toggles.
+-- across checkbox toggles. Used in "real"/"res" mode (1 line/ware, full
+-- 8-colour palette).
 local function colorForWare(wareList, wareId)
   for i, w in ipairs(wareList) do
     if w == wareId then
@@ -105,6 +115,40 @@ local function colorForWare(wareList, wareId)
     end
   end
   return config.seriesColors[1]
+end
+
+-- Paired colours for "both" mode (2 lines/ware): ware i gets the (2i-1)th
+-- colour for "real" and the 2i-th for "res", wrapping every 4 wares (8 colours
+-- / 2 per ware). Mirrors vanilla's own buy/sell colour pairing in
+-- ego_detailmonitor/menu_station_overview.lua's config.graph.datarecordcolors
+-- (which pairs graph_data_1/2, 3/4, 5/6, 7/8 the same way, also capped at 4
+-- simultaneous paired series for the same reason: 8 colours / 2 per item).
+local function colorPairForWare(wareList, wareId)
+  local pairCount = math.floor(#config.seriesColors / 2)
+  for i, w in ipairs(wareList) do
+    if w == wareId then
+      local pairIdx = (i - 1) % pairCount
+      return config.seriesColors[pairIdx * 2 + 1], config.seriesColors[pairIdx * 2 + 2]
+    end
+  end
+  return config.seriesColors[1], config.seriesColors[2]
+end
+
+-- How many graph lines one shown ware costs in a given display mode.
+local function linesPerWare(dataMode)
+  return (dataMode == "both") and 2 or 1
+end
+
+-- Effective ware-count thresholds for the current display mode: in "both"
+-- mode each ware costs 2 lines, so the ware-count versions of
+-- wareCountSoftLimit/maxShownWares are halved (floored) compared to single
+-- mode, since both thresholds are fundamentally LINE-count limits.
+local function effectiveWareCaps(dataMode)
+  local perWare = linesPerWare(dataMode)
+  return {
+    soft = math.floor(config.wareCountSoftLimit / perWare),
+    hard = math.floor(config.maxShownWares / perWare),
+  }
 end
 
 -- Builds the full-fidelity {x=,y=} point list for one change-only series within
@@ -116,7 +160,9 @@ end
 -- below for how the result is (optionally) downsampled before being plotted, to
 -- stay under the graph's total point budget.
 -- ctx carries { startTime, now, graphXScale, xRange } (read-only here).
-local function buildPoints(series, ctx)
+-- valueKey selects which stored value to plot: "real" (raw stock) or "res"
+-- (reservation-corrected) -- see swh_collector.lua's series shape.
+local function buildPoints(series, ctx, valueKey)
   local lastBefore, firstInWindowIdx = nil, nil
   for i = 1, #series do
     local point = series[i]
@@ -129,18 +175,18 @@ local function buildPoints(series, ctx)
 
   local points = {}
   if lastBefore ~= nil then
-    points[#points + 1] = { x = -ctx.xRange, y = lastBefore.v }
+    points[#points + 1] = { x = -ctx.xRange, y = lastBefore[valueKey] }
   end
   if firstInWindowIdx ~= nil then
     for i = firstInWindowIdx, #series do
       local point = series[i]
-      points[#points + 1] = { x = (point.t - ctx.now) / ctx.graphXScale, y = point.v }
+      points[#points + 1] = { x = (point.t - ctx.now) / ctx.graphXScale, y = point[valueKey] }
     end
   end
 
   local lastX = (#points > 0) and points[#points].x or nil
   if lastX == nil or lastX < 0 then
-    points[#points + 1] = { x = 0, y = series[#series].v }
+    points[#points + 1] = { x = 0, y = series[#series][valueKey] }
   end
   return points
 end
@@ -240,15 +286,21 @@ local function buildZoomContext()
 end
 
 -- Total full-fidelity point count (buildPoints, anchors included) across every
--- currently shown ware for the selected station. Used only to decide checkbox
--- availability -- the actual plotted points may end up lower after decimation.
-local function totalShownPoints(ctx)
+-- currently shown ware for the selected station, for the given display mode
+-- ("both" counts both the "real" and "res" lines). Used only to decide
+-- checkbox availability -- the actual plotted points may end up lower after
+-- decimation.
+local function totalShownPoints(ctx, dataMode)
   local total = 0
   if menu.selectedIdcode ~= nil then
     for wareId in pairs(menu.shownWares) do
       local series = swh.getSeries(menu.selectedIdcode, wareId)
       if #series > 0 then
-        total = total + #buildPoints(series, ctx)
+        if dataMode == "both" then
+          total = total + #buildPoints(series, ctx, "real") + #buildPoints(series, ctx, "res")
+        else
+          total = total + #buildPoints(series, ctx, dataMode)
+        end
       end
     end
   end
@@ -265,6 +317,7 @@ function menu.onShowMenu()
   end
   menu.shownWares = {}
   menu.xZoom = config.defaultZoom
+  menu.dataMode = config.defaultDataMode
   menu.createFrame()
 end
 
@@ -289,7 +342,7 @@ function menu.checkboxWareToggled(wareId, checked)
   if checked then
     local shownCount = 0
     for _ in pairs(menu.shownWares) do shownCount = shownCount + 1 end
-    if shownCount < config.maxShownWares then
+    if shownCount < effectiveWareCaps(menu.dataMode).hard then
       menu.shownWares[wareId] = true
     end
   else
@@ -301,6 +354,13 @@ end
 function menu.buttonZoom(i)
   menu.xZoom = i
   menu.refreshInfoFrame()
+end
+
+function menu.buttonDataModeSelected(_, mode)
+  if mode ~= menu.dataMode then
+    menu.dataMode = mode
+    menu.refreshInfoFrame()
+  end
 end
 
 -- *** Frame construction ***
@@ -361,6 +421,26 @@ function menu.createLeftPanel(x, width, ctx)
   row[1]:setColSpan(2):createDropDown(options, { active = #options > 0, startOption = startOption, height = Helper.standardButtonHeight })
   row[1].handlers.onDropDownConfirmed = menu.buttonStationSelected
 
+  -- Shown-ware count, needed by both the data-mode dropdown (to disable
+  -- "Both") and the per-checkbox availability check below.
+  local shownCount = 0
+  for _ in pairs(menu.shownWares) do shownCount = shownCount + 1 end
+
+  -- Display-mode selector: which stored value(s) to plot per shown ware.
+  row = leftTable:addRow(false, { fixed = true })
+  row[1]:setColSpan(2):createText(ReadText(1972092430, 1017), { halign = "left" })
+
+  local bothAvailable = shownCount <= config.bothModeMaxWaresToOffer
+  local dataModeOptions = {
+    { id = "real", icon = "", text = ReadText(1972092430, 1018), displayremoveoption = false },
+    { id = "res",  icon = "", text = ReadText(1972092430, 1019), displayremoveoption = false },
+    { id = "both", icon = "", text = ReadText(1972092430, 1020), displayremoveoption = false,
+      active = bothAvailable, mouseovertext = bothAvailable and "" or ReadText(1972092430, 1021) },
+  }
+  row = leftTable:addRow("datamode_dropdown", { fixed = true })
+  row[1]:setColSpan(2):createDropDown(dataModeOptions, { startOption = menu.dataMode, height = Helper.standardButtonHeight })
+  row[1].handlers.onDropDownConfirmed = menu.buttonDataModeSelected
+
   -- Ware checkboxes
   row = leftTable:addRow(false, { fixed = true })
   row[1]:setColSpan(2):createText(ReadText(1972092430, 1012), { halign = "left" })
@@ -374,18 +454,16 @@ function menu.createLeftPanel(x, width, ctx)
       row = leftTable:addRow(false, {})
       row[1]:setColSpan(2):createText(ReadText(1972092430, 1014), { halign = "center" })
     else
-      local shownCount = 0
-      for _ in pairs(menu.shownWares) do shownCount = shownCount + 1 end
-
-      -- Whether an unchecked checkbox may still be checked. Below the soft
-      -- limit, always; at the hard cap, never (no point counting needed); in
-      -- between, only while the currently shown wares' combined point count
-      -- stays under the budget.
+      -- Whether an unchecked checkbox may still be checked. Below the
+      -- (mode-adjusted) soft limit, always; at the hard cap, never (no point
+      -- counting needed); in between, only while the currently shown wares'
+      -- combined point count stays under the budget.
+      local caps = effectiveWareCaps(menu.dataMode)
       local allowMore
-      if shownCount >= config.maxShownWares then
+      if shownCount >= caps.hard then
         allowMore = false
-      elseif shownCount >= config.wareCountSoftLimit then
-        allowMore = totalShownPoints(ctx) < config.wareSelectionPointsBudget
+      elseif shownCount >= caps.soft then
+        allowMore = totalShownPoints(ctx, menu.dataMode) < config.wareSelectionPointsBudget
       else
         allowMore = true
       end
@@ -415,14 +493,18 @@ function menu.createGraphPanel(x, width, ctx)
   -- Build every shown line's full-fidelity point list first, so we know the
   -- total before deciding whether anything needs to be downsampled to stay
   -- within the graph's shared point budget (config.maxTotalPoints, across all
-  -- lines combined -- not per line).
+  -- lines combined -- not per line). In "both" mode each shown ware produces
+  -- two lines (key="real" and key="res"), each counted/capped independently.
   local lines = {}
   if menu.selectedIdcode ~= nil then
+    local keys = (menu.dataMode == "both") and { "real", "res" } or { menu.dataMode }
     for wareId in pairs(menu.shownWares) do
       local series = swh.getSeries(menu.selectedIdcode, wareId)
       if #series > 0 then
-        local points = buildPoints(series, ctx)
-        lines[#lines + 1] = { id = wareId, points = points, need = #points }
+        for _, key in ipairs(keys) do
+          local points = buildPoints(series, ctx, key)
+          lines[#lines + 1] = { id = wareId .. "#" .. key, wareId = wareId, key = key, points = points, need = #points }
+        end
       end
     end
   end
@@ -439,14 +521,25 @@ function menu.createGraphPanel(x, width, ctx)
       totalPoints, #lines, config.maxTotalPoints)
   end
 
-  local minY, maxY = 0, 1
+  local maxY = 1
   local wareList = (menu.selectedIdcode ~= nil) and swh.getWaresForStation(menu.selectedIdcode) or {}
   for _, line in ipairs(lines) do
     local points = line.points
     if caps ~= nil and #points > caps[line.id] then
       points = decimatePoints(points, caps[line.id])
     end
-    local color = colorForWare(wareList, line.id)
+
+    local color
+    local wareName = GetWareData(line.wareId, "name") or line.wareId
+    local mouseOverText = wareName
+    if menu.dataMode == "both" then
+      local realColor, resColor = colorPairForWare(wareList, line.wareId)
+      color = (line.key == "real") and realColor or resColor
+      mouseOverText = wareName .. " (" .. ReadText(1972092430, (line.key == "real") and 1022 or 1023) .. ")"
+    else
+      color = colorForWare(wareList, line.wareId)
+    end
+
     local datarecord = menu.graph:addDataRecord({
       markertype  = config.point.type,
       markersize  = config.point.size,
@@ -454,17 +547,18 @@ function menu.createGraphPanel(x, width, ctx)
       linetype    = config.line.type,
       linewidth   = config.line.size,
       linecolor   = color,
-      mouseOverText = GetWareData(line.id, "name") or line.id,
+      mouseOverText = mouseOverText,
     })
     for _, p in ipairs(points) do
       datarecord:addData(p.x, p.y, nil, nil)
-      minY = math.min(minY, p.y)
       maxY = math.max(maxY, p.y)
     end
   end
 
-  maxY = math.max(maxY, 1)
-  local granularity = math.max(1, Helper.round((maxY - minY) / 10))
+  -- Round the Y axis' top up to the nearest config.maxYRoundTo (1000) so it
+  -- reads as a clean number rather than whatever the data happens to peak at.
+  maxY = math.max(config.maxYRoundTo, math.ceil(maxY / config.maxYRoundTo) * config.maxYRoundTo)
+  local granularity = maxY / 10
 
   local xRange = ctx.xRange
   local xGran  = Helper.round(ctx.xGranularity / ctx.graphXScale, 3)
