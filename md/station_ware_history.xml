@@ -99,7 +99,7 @@
               <set_value name="$cfg" exact="player.entity.$stationWareHistory.$config" />
               <!-- Reset every time the options page is opened, so a stale
                    confirmation never survives to the next visit. -->
-              <set_value name="player.entity.$stationWareHistory.$confirmClear" exact="false" />
+              <set_value name="$cfg.$confirmClear" exact="false" />
               <set_value name="$collectionDisabled" exact="not (@$cfg.$enabled == true or @$cfg.$enabled == 1)" />
               <do_if value="$collectionDisabled" negate="true">
                 <set_value name="$cfg.$confirmClear" exact="false" />
