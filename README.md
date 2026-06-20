@@ -99,7 +99,7 @@ When the limit ill be reached, checkboxes for additional wares will be disabled.
 
 ## Changelog
 
-### [8.00.02] - 2026-06-20
+### [8.00.02] - 2026-06-21
 
 - **Added**
   - Initial version: data collection, graph menu, configurable interval/retention, Clear Data.
