@@ -1,13 +1,60 @@
 <?xml version="1.0" encoding="utf-8"?>
 <content
-    id=""
-    name="Station Ware History"
-    author="Chem O`Dun"
-    version="80001"
-    date="2026-06-20"
-    save="false"
-    sync="false"
-    description="Periodically samples ware stock on every player-owned station and lets you graph the history per station, with a configurable sampling interval and retention window. Access via the station's right-click interaction menu.">
-    <dependency version="800"></dependency>
-    <dependency id="ws_2042901274" optional="false" name="SirNukes Mod Support APIs" version="195"></dependency>
+  id=""
+  name="Station Ware History"
+  author="Chem O`Dun"
+  version="80002"
+  date="2026-06-21"
+  save="false"
+  sync="false"
+  enabled="true"
+  lastupdate="1781991708"
+  description="Periodically samples ware stock on every player-owned station and lets you graph the history per station, with a configurable sampling interval and retention window. Access via the station's right-click interaction menu.">
+  <text language="7"
+    description="Periodically samples ware stock on every player-owned station and lets you graph the history per station, with a configurable sampling interval and retention window. Access via the station's right-click interaction menu."></text>
+  <!-- French -->
+  <text language="33"
+    description="Échantillonne périodiquement le stock de marchandises sur chaque station appartenant au joueur et vous permet de visualiser l'historique sous forme de graphique pour chaque station, avec un intervalle d'échantillonnage et une période de conservation configurables. Accessible via le menu d'interaction (clic droit) de la station."></text>
+  <!-- Spanish -->
+  <text language="34"
+    description="Muestra periódicamente las existencias de mercancías de cada estación propiedad del jugador y te permite graficar el historial por estación, con un intervalo de muestreo y un período de retención configurables. Se accede mediante el menú de interacción (clic derecho) de la estación."></text>
+  <!-- Italian -->
+  <text language="39"
+    description="Campiona periodicamente le scorte di merci su ogni stazione di proprietà del giocatore e ti permette di visualizzare in un grafico la cronologia per stazione, con un intervallo di campionamento e un periodo di conservazione configurabili. Accessibile tramite il menu di interazione (clic destro) della stazione."></text>
+  <!-- Czech -->
+  <text language="42"
+    description="Periodicky vzorkuje zásoby zboží na každé stanici vlastněné hráčem a umožňuje vám zobrazit historii formou grafu pro každou stanici, s nastavitelným intervalem vzorkování a dobou uchování dat. Přístupné přes interakční nabídku stanice (pravé tlačítko myši)."></text>
+  <!-- English -->
+  <text language="44"
+    description="Periodically samples ware stock on every player-owned station and lets you graph the history per station, with a configurable sampling interval and retention window. Access via the station's right-click interaction menu."></text>
+  <!-- Polish -->
+  <text language="48"
+    description="Okresowo próbkuje zapasy towarów na każdej stacji należącej do gracza i pozwala wykreślić historię dla każdej stacji, z konfigurowalnym interwałem próbkowania i okresem przechowywania danych. Dostęp poprzez menu interakcji stacji (prawy przycisk myszy)."></text>
+  <!-- German -->
+  <text language="49"
+    description="Erfasst periodisch den Warenbestand jeder spielereigenen Station und ermöglicht es, den Verlauf pro Station grafisch darzustellen, mit konfigurierbarem Erfassungsintervall und Aufbewahrungszeitraum. Zugriff über das Interaktionsmenü der Station (Rechtsklick)."></text>
+  <!-- Portuguese -->
+  <text language="55"
+    description="Amostra periodicamente o estoque de mercadorias em cada estação de propriedade do jogador e permite visualizar o histórico em gráfico por estação, com intervalo de amostragem e período de retenção configuráveis. Acesse pelo menu de interação da estação (clique com o botão direito)."></text>
+  <!-- Japanese -->
+  <text language="81"
+    description="プレイヤー所有の各ステーションのウェア在庫を定期的にサンプリングし、ステーションごとの履歴をグラフ表示できます。サンプリング間隔と保持期間は設定可能です。ステーションの右クリックインタラクションメニューからアクセスします。"></text>
+  <!-- Korean -->
+  <text language="82"
+    description="플레이어가 소유한 모든 정거장의 상품 재고를 주기적으로 샘플링하여 정거장별 기록을 그래프로 표시합니다. 샘플링 간격과 보존 기간을 설정할 수 있습니다. 정거장의 우클릭 상호작용 메뉴를 통해 접근합니다."></text>
+  <!-- Chinese Simplified -->
+  <text language="86"
+    description="定期采集每个玩家拥有的空间站的货物库存，并让你以图表形式查看各空间站的历史记录，采样间隔和保留时长均可配置。通过空间站的右键互动菜单访问。"></text>
+  <!-- Chinese Traditional -->
+  <text language="88"
+    description="定期採集每個玩家擁有的太空站的貨物庫存，並讓你以圖表形式查看各太空站的歷史記錄，採樣間隔和保留時長皆可設定。透過太空站的右鍵互動選單存取。"></text>
+  <!-- Turkish -->
+  <text language="90"
+    description="Oyuncuya ait her istasyondaki mal stoğunu periyodik olarak örnekler ve istasyon başına geçmişi grafik olarak görüntülemenizi sağlar; örnekleme aralığı ve saklama süresi yapılandırılabilir. İstasyonun sağ tık etkileşim menüsü üzerinden erişilir."></text>
+  <!-- Ukrainian -->
+  <text language="380"
+    description="Періодично здійснює вибірку запасів товарів на кожній станції, що належить гравцеві, і дозволяє будувати графік історії для кожної станції, з можливістю налаштування інтервалу вибірки та періоду зберігання. Доступ через контекстне меню взаємодії станції (права кнопка миші)."></text>
+  <dependency version="800"></dependency>
+  <dependency id="ws_2042901274" optional="false" name="SirNukes Mod Support APIs" version="195"></dependency>
+  <dependency id="ws_3715253556" optional="false" name="Options Helper" version="110"></dependency>
 </content>
