@@ -97,9 +97,11 @@ local function traceLog(fmt, ...)
   end
 end
 
-function swh.onDebugLevelChanged(_, param)
-  if param ~= nil then
-    swh.debugLevel = tostring(param)
+function swh.onDebugLevelChanged()
+  local cfg = GetNPCBlackboard(swh.playerId, "$stationWareHistory")
+  if cfg and cfg.config and cfg.config.debugLevel then
+    swh.debugLevel = tostring(cfg.config.debugLevel)
+    debugLog("Debug level changed to %s.", swh.debugLevel)
   end
 end
 
@@ -259,38 +261,25 @@ local function pruneAll(now)
   debugLog("pruneAll: retentionHours=%d cutoff=%.1f, trimmed %d series.", retentionHours, cutoff, prunedSeries)
 end
 
-function swh.onCollect()
-  local now           = C.GetCurrentGameTime()
+function swh.refreshStationsList()
+  local stationsSeen = {}
   local stationsList   = GetContainedStationsByOwner("player")
-  local stationsSeen   = {}
-  local wareSamples    = 0
-
-  debugLog("onCollect: starting, %d player station(s) found, t=%.1f.", #stationsList, now)
-
+  debugLog("refreshStationsList: found %d player-owned station(s).", #stationsList)
   for i = 1, #stationsList do
     local stationLuaId = stationsList[i]
-    local id64                       = ConvertIDTo64Bit(stationLuaId)
+    local id64 = ConvertIDTo64Bit(stationLuaId)
     local idcode, name, sector, sectorLuaId  = GetComponentData(stationLuaId, "idcode", "name", "sector", "sectorid")
+    stationsSeen[idcode] = true
     if idcode ~= nil then
-      stationsSeen[idcode] = true
       swh.stations[idcode] = {
         name       = name .. " (" .. idcode .. ")",
+        id64       = id64,
         sectorName = sector,
+        sectorLuaId  = sectorLuaId,
         luaId      = stationLuaId,
       }
-
-      local wareSet = relevantWareSet(id64)
-      local rawTable, correctedTable = sampleCargo(id64, wareSet)
-      local stationWareCount = 0
-      for wareId in pairs(wareSet) do
-        appendPoint(idcode, wareId, now, rawTable[wareId] or 0, correctedTable[wareId] or 0)
-        stationWareCount = stationWareCount + 1
-      end
-      wareSamples = wareSamples + stationWareCount
-      traceLog("onCollect: station=%s (%s) sampled %d ware(s).", name, idcode, stationWareCount)
     end
   end
-
   -- Drop stations no longer owned from the live name cache; their recorded
   -- history is left untouched (it ages out via the retention prune below).
   for idcode in pairs(swh.stations) do
@@ -299,26 +288,32 @@ function swh.onCollect()
       swh.stations[idcode] = nil
     end
   end
+end
+
+function swh.onCollect()
+  local now           = C.GetCurrentGameTime()
+  local wareSamples    = 0
+
+  swh.refreshStationsList()
+
+  debugLog("onCollect: starting, player station(s) found: %s, t=%.1f.", next(swh.stations) ~= nil, now)
+
+  for idcode, station in pairs(swh.stations) do
+    traceLog("onCollect: station %s (%s) in sector %s.", station.name, idcode, station.sectorName)
+    local wareSet = relevantWareSet(station.id64)
+    local rawTable, correctedTable = sampleCargo(station.id64, wareSet)
+    local stationWareCount = 0
+    for wareId in pairs(wareSet) do
+      appendPoint(idcode, wareId, now, rawTable[wareId] or 0, correctedTable[wareId] or 0)
+      stationWareCount = stationWareCount + 1
+    end
+    wareSamples = wareSamples + stationWareCount
+    traceLog("onCollect: station=%s (%s) sampled %d ware(s).", station.name, idcode, stationWareCount)
+  end
 
   pruneAll(now)
   saveToBlackboard()
-  debugLog("onCollect: done, %d station(s), %d ware sample(s) processed.", #stationsList, wareSamples)
-end
-
--- Wipes all recorded history for every station and persists the empty result
--- immediately. Triggered from the options menu's "Clear Data" button, which
--- is itself only clickable while data collection is disabled -- so there's no
--- onCollect() running concurrently that could resurrect anything right after.
--- Also clears the live station-name cache (normally rebuilt by the next
--- onCollect) so the menu's station dropdown goes empty right away rather than
--- showing stale names with nothing underneath them.
-function swh.onClearData()
-  local stationCount = 0
-  for _ in pairs(swh.data) do stationCount = stationCount + 1 end
-  swh.data = {}
-  swh.stations = {}
-  saveToBlackboard()
-  debugLog("onClearData: cleared history for %d station(s).", stationCount)
+  debugLog("onCollect: done, %d ware sample(s) processed.", wareSamples)
 end
 
 -- *** queries for the menu ***
@@ -341,6 +336,7 @@ function swh.getStationLuaId(idcode)
 end
 
 function swh.getStationList()
+  swh.refreshStationsList()
   local seen = {}
   local list = {}
   for idcode, info in pairs(swh.stations) do
@@ -385,6 +381,7 @@ end
 
 function swh.init()
   swh.playerId = ConvertStringTo64Bit(tostring(C.GetPlayerID()))
+  swh.onDebugLevelChanged()
   loadFromBlackboard()
 
   -- Initial debug level (written by the options menu into
@@ -397,7 +394,6 @@ function swh.init()
 
   RegisterEvent("StationWareHistory.Collect", swh.onCollect)
   RegisterEvent("StationWareHistory.DebugLevelChanged", swh.onDebugLevelChanged)
-  RegisterEvent("StationWareHistory.ClearData", swh.onClearData)
 
   debugLog("init: playerId=%s debugLevel=%s.", tostring(swh.playerId), swh.debugLevel)
 
