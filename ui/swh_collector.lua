@@ -305,6 +305,22 @@ function swh.onCollect()
   debugLog("onCollect: done, %d station(s), %d ware sample(s) processed.", #stationsList, wareSamples)
 end
 
+-- Wipes all recorded history for every station and persists the empty result
+-- immediately. Triggered from the options menu's "Clear Data" button, which
+-- is itself only clickable while data collection is disabled -- so there's no
+-- onCollect() running concurrently that could resurrect anything right after.
+-- Also clears the live station-name cache (normally rebuilt by the next
+-- onCollect) so the menu's station dropdown goes empty right away rather than
+-- showing stale names with nothing underneath them.
+function swh.onClearData()
+  local stationCount = 0
+  for _ in pairs(swh.data) do stationCount = stationCount + 1 end
+  swh.data = {}
+  swh.stations = {}
+  saveToBlackboard()
+  debugLog("onClearData: cleared history for %d station(s).", stationCount)
+end
+
 -- *** queries for the menu ***
 
 function swh.getStationName(idcode)
@@ -381,6 +397,7 @@ function swh.init()
 
   RegisterEvent("StationWareHistory.Collect", swh.onCollect)
   RegisterEvent("StationWareHistory.DebugLevelChanged", swh.onDebugLevelChanged)
+  RegisterEvent("StationWareHistory.ClearData", swh.onClearData)
 
   debugLog("init: playerId=%s debugLevel=%s.", tostring(swh.playerId), swh.debugLevel)
 

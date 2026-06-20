@@ -97,6 +97,14 @@
           <actions>
             <do_if value="@player.entity.$stationWareHistory.$config != null">
               <set_value name="$cfg" exact="player.entity.$stationWareHistory.$config" />
+              <!-- Reset every time the options page is opened, so a stale
+                   confirmation never survives to the next visit. -->
+              <set_value name="player.entity.$stationWareHistory.$confirmClear" exact="false" />
+              <set_value name="$collectionDisabled" exact="not (@$cfg.$enabled == true or @$cfg.$enabled == 1)" />
+
+              <run_actions ref="md.Options_Helper.Add_Title_Row">
+                <param name="title" value="{1972092430, 90100}" />
+              </run_actions>
 
               <!-- Master switch, shown above everything else -->
               <include_actions ref="md.Options_Helper.Add_Empty_Row" />
@@ -110,9 +118,6 @@
               </run_actions>
 
               <include_actions ref="md.Options_Helper.Add_Empty_Row" />
-              <run_actions ref="md.Options_Helper.Add_Title_Row">
-                <param name="title" value="{1972092430, 90100}" />
-              </run_actions>
 
               <!-- Collection interval (1-10 min, default 5) -->
               <run_actions ref="md.Options_Helper.Add_Slider">
@@ -141,6 +146,37 @@
                 <param name="data" value="$cfg" />
                 <param name="handle" value="SWH_HandleSlider" />
               </run_actions>
+
+              <!-- Section: Clear Data. Both controls only active while data
+                   collection is disabled, so a clear can never race a
+                   collection in progress. -->
+              <include_actions ref="md.Options_Helper.Add_Empty_Row" />
+              <run_actions ref="md.Options_Helper.Add_Title_Row">
+                <param name="title" value="{1972092430, 90300}" />
+              </run_actions>
+
+              <run_actions ref="md.Options_Helper.Add_Checkbox">
+                <param name="id" value="'confirmClear'" />
+                <param name="col" value="1" />
+                <param name="textColSpan" value="11" />
+                <param name="text" value="{1972092430, 90310}" />
+                <param name="data" value="player.entity.$stationWareHistory" />
+                <param name="active" value="$collectionDisabled" />
+                <param name="handle" value="SWH_HandleConfirmClearCheckbox" />
+              </run_actions>
+
+              <run_actions ref="md.Options_Helper.Add_Button">
+                <param name="id" value="'clearData'" />
+                <param name="col" value="1" />
+                <param name="textColSpan" value="9" />
+                <param name="text" value="{1972092430, 90311}" />
+                <param name="buttonColSpan" value="3" />
+                <param name="buttonText" value="{1972092430, 90312}" />
+                <param name="active" value="$collectionDisabled" />
+                <param name="handle" value="SWH_HandleClearData" />
+              </run_actions>
+
+              <remove_value name="$collectionDisabled" />
 
               <!-- Section: Debug -->
               <include_actions ref="md.Options_Helper.Add_Empty_Row" />
@@ -186,6 +222,55 @@
             <set_value name="$resultTable" exact="player.entity.$stationWareHistory.$config" />
             <include_actions ref="md.Options_Helper.Process_Checkbox_Changed" />
             <remove_value name="$resultTable" />
+          </actions>
+        </cue>
+
+        <!-- *** Clear Data: confirmation checkbox handler ***
+             $confirmClear lives directly on player.entity.$stationWareHistory
+             (not inside $config: it's transient UI state, reset to false
+             every time the options page opens, not a saved setting). -->
+        <cue name="SWH_HandleConfirmClearCheckbox" instantiate="true" version="1">
+          <conditions>
+            <event_cue_signalled />
+          </conditions>
+          <actions>
+            <set_value name="$resultTable" exact="player.entity.$stationWareHistory" />
+            <include_actions ref="md.Options_Helper.Process_Checkbox_Changed" />
+            <remove_value name="$resultTable" />
+          </actions>
+        </cue>
+
+        <!-- *** Clear Data: button handler ***
+             Re-checks both gating conditions itself (confirmed + collection
+             disabled) rather than trusting the button's active state alone:
+             active=false should already prevent the click from firing at all,
+             but this is the one action in the whole mod that's actually
+             destructive, so it's worth not relying on that alone. -->
+        <cue name="SWH_HandleClearData" instantiate="true" version="1">
+          <conditions>
+            <event_cue_signalled />
+          </conditions>
+          <actions>
+            <include_actions ref="SWH_ReadDebugChances" />
+            <set_value name="$collectionEnabled" exact="@player.entity.$stationWareHistory.$config.$enabled == true
+              or @player.entity.$stationWareHistory.$config.$enabled == 1" />
+            <set_value name="$confirmed" exact="@player.entity.$stationWareHistory.$confirmClear == true
+              or @player.entity.$stationWareHistory.$confirmClear == 1" />
+            <do_if value="$confirmed and not $collectionEnabled">
+              <debug_text text="'StationWareHistory: SWH_HandleClearData clearing all collected data.'"
+                chance="$debugChance" filter="general" />
+              <raise_lua_event name="'StationWareHistory.ClearData'" />
+              <set_value name="player.entity.$stationWareHistory.$confirmClear" exact="false" />
+              <signal_cue_instantly cue="md.Simple_Menu_API.Refresh_Menu" />
+            </do_if>
+            <do_else>
+              <debug_text text="'StationWareHistory: SWH_HandleClearData ignored (confirmed=%s, collectionEnabled=%s).'.[$confirmed, $collectionEnabled]"
+                chance="$traceChance" filter="general" />
+            </do_else>
+            <remove_value name="$collectionEnabled" />
+            <remove_value name="$confirmed" />
+            <remove_value name="$debugChance" />
+            <remove_value name="$traceChance" />
           </actions>
         </cue>
 

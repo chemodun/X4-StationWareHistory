@@ -33,6 +33,12 @@
             <t id="90101">Collection Interval</t>
             <t id="90102">Retention Period</t>
 
+            <!-- Section: Clear Data (90300) -->
+            <t id="90300">Clear Data</t>
+            <t id="90310">Confirm Clearing Collected Data</t>
+            <t id="90311">Permanently delete all recorded ware history for every station.</t>
+            <t id="90312">Clear Data</t>
+
             <!-- Section: Debug (90200) -->
             <t id="90200">Debug</t>
             <t id="90210">Debug Level</t>
