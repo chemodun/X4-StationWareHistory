@@ -274,8 +274,8 @@ function swh.onCollect()
     if idcode ~= nil then
       stationsSeen[idcode] = true
       swh.stations[idcode] = {
-        name       = name .. " (" .. idcode .. ") - " .. sector,
-        sectorName = GetComponentData(sectorLuaId, "name"),
+        name       = name .. " (" .. idcode .. ")",
+        sectorName = sector,
         luaId      = stationLuaId,
       }
 

@@ -696,8 +696,7 @@ end
 
 function menu.createLeftPanel(x, width, ctx)
   local leftTable = menu.infoFrame:addTable(2, { tabOrder = 1, width = width, x = x, y = Helper.frameBorder, borderEnabled = true, backgroundID = "solid", backgroundColor = Color["frame_background_semitransparent"] })
-  local firstColumnWidth = Helper.scaleX(Helper.standardTextHeight)
-  leftTable:setColWidth(1, firstColumnWidth)
+  leftTable:setColWidth(1, Helper.standardTextHeight)
 
   local row = leftTable:addRow(false, { fixed = true, bgColor = Color["row_title_background"] })
   row[1]:setColSpan(2):createText(ReadText(1972092430, 1010), Helper.titleTextProperties)
@@ -710,7 +709,7 @@ function menu.createLeftPanel(x, width, ctx)
   local options = {}
   local startOption = ""
   for _, station in ipairs(stations) do
-    options[#options + 1] = { id = station.idcode, icon = "", text = station.name, displayremoveoption = false }
+    options[#options + 1] = { id = station.idcode, icon = "", text = station.name, text2 = station.sectorName, displayremoveoption = false }
     if station.idcode == menu.selectedIdcode then
       startOption = station.idcode
     end
@@ -722,6 +721,8 @@ function menu.createLeftPanel(x, width, ctx)
 
   row = leftTable:addRow("station_dropdown", { fixed = true })
   row[1]:setColSpan(2):createDropDown(options, { active = #options > 0, startOption = startOption, height = Helper.standardButtonHeight })
+  row[1]:setText2Properties({ halign = "left" })
+  row[1]:setText2Properties({ halign = "right" })
   row[1].handlers.onDropDownConfirmed = menu.buttonStationSelected
 
   -- Shown-ware count, needed by both the data-mode dropdown (to disable
