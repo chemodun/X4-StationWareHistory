@@ -53,7 +53,7 @@ When the limit ill be reached, checkboxes for additional wares will be disabled.
 
   ![Show Ware History interaction menu entry](docs/images/interaction_menu.png)
 
-- Or open any of that station's menus (**Station configuration**, **Logical station overview**, **Transaction Log**) and click the **Station
+- Or open any of that station's menus (**Station configuration**, **Logical station overview**, **Transaction Log**) and click the **Show Ware History** button in the right-side bar.
 
   ![Station Ware History icon in Right Bar](docs/images/station_menus_right_bar.png)
 
