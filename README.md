@@ -26,8 +26,8 @@ Periodically samples ware stock on every player-owned station and lets you graph
 
 ## Installation
 
-- **Steam Workshop**: [All Ships with Filters](https://steamcommunity.com/sharedfiles/filedetails/?id=0)
-- **Nexus Mods**: [All Ships with Filters](https://www.nexusmods.com/x4foundations/mods/2178)
+- **Steam Workshop**: [Station Ware History](https://steamcommunity.com/sharedfiles/filedetails/?id=3748682047)
+- **Nexus Mods**: [Station Ware History](https://www.nexusmods.com/x4foundations/mods/2178)
 
 ## Usage
 
