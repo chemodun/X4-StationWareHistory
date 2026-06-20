@@ -46,8 +46,14 @@ ffi.cdef [[
     bool        issupply;
   } WareReservationInfo2;
 
+  typedef struct {
+    int major;
+    int minor;
+  } GameVersion;
+
   double     GetCurrentGameTime(void);
   UniverseID GetPlayerID(void);
+  GameVersion GetGameVersion(void);
 
   uint32_t GetNumContainerWareReservations2(UniverseID containerid,
              bool includevirtual, bool includemission, bool includesupply);
@@ -59,6 +65,10 @@ ffi.cdef [[
 local swh = {
   playerId   = nil,
   debugLevel = "debug",
+  -- Some Helper.* APIs (e.g. the right-side bar mechanism) differ or don't
+  -- exist between 8.00 and 9.00 -- mirrors safe_cheat_panel's own isV9 guard.
+  -- Read by swh_history_menu.lua to skip version-specific Helper calls on 8.00.
+  isV9       = C.GetGameVersion().major >= 9,
   data       = {},  -- data[stationIdcode][wareId] = { {t=,real=,res=}, ... }
   stations   = {},  -- stations[stationIdcode] = { name=, sectorName=, luaId= }; rebuilt every collect
 }
@@ -303,6 +313,15 @@ function swh.getStationName(idcode)
     return info.name
   end
   return idcode
+end
+
+-- Live LuaID for a tracked station, refreshed every onCollect; nil if the
+-- station hasn't been seen this session yet (e.g. right after a fresh load,
+-- before the first collection pass) or no longer exists. Used by the menu to
+-- mirror the right-side bar, which needs a real component reference.
+function swh.getStationLuaId(idcode)
+  local info = swh.stations[idcode]
+  return info ~= nil and info.luaId or nil
 end
 
 function swh.getStationList()

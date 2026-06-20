@@ -86,13 +86,82 @@ function menu.cleanup()
   menu.infoFrame = nil
   menu.stationDropdown = nil
   menu.graph = nil
+  menu.container = nil
+  menu.sidebarWidth = nil
 end
 
 -- *** Lua-event entry point: opens the menu for a given station component ***
 
 local function onOpenMenuEvent(_, stationLuaId)
   local station64 = ConvertIDTo64Bit(stationLuaId)
-  OpenMenu("StationWareHistoryMenu", { 0, 0, station64 }, nil)
+  -- param2 = explicit back-target: with no back-target, Helper.closeMenu's
+  -- "back" handling falls through to the engine's generic DockedMenu/
+  -- TopLevelMenu/nothing fallback instead of returning to the map, since this
+  -- menu is always opened from there (via the station's interaction menu).
+  OpenMenu("StationWareHistoryMenu", { 0, 0, station64 }, { "MapMenu", { 0, 0 }, nil })
+end
+
+-- *** Right side bar integration ***
+--
+-- Helper.rightSideBar (ego_detailmonitorhelper/helper.lua) is the shared,
+-- module-level icon list every station menu with a right side bar
+-- (StationConfigurationMenu, StationOverviewMenu, TransactionLogMenu) renders
+-- from -- a plain table, appendable at runtime without patching anything.
+-- Helper.createRightSideBar's render loop defaults entries with no
+-- canresearch/canterraform key to display=true, active=true unconditionally
+-- (only "construction"/"transactions" get isplayerowned-gated active state,
+-- hardcoded by mode name) -- so our entry shows up active on every station
+-- regardless of ownership. Accepted trade-off: clicking it on a station we
+-- have no data for just shows our own "no wares with recorded history" empty
+-- state (see createLeftPanel) -- no crash, no patch needed beyond this.
+--
+-- The icon-to-menu mapping (Helper.buttonRightBar) is a flat if/elseif chain
+-- with no dispatch table, so wiring our mode in requires wrapping that
+-- function: try our mode first, otherwise fall through to the original.
+-- Helper.rightSideBar and Helper.buttonRightBar are byte-for-byte identical
+-- between 8.00 and 9.00 (diffed directly against
+-- extracted/8.00/ui/addons/ego_detailmonitorhelper/helper.lua) -- only
+-- Helper.createRightSideBar's call signature differs (see swh.isV9 branch in
+-- createFrame below), so nothing here needs a version guard.
+local function installRightSideBarEntry()
+  if Helper == nil or Helper.rightSideBar == nil then
+    return
+  end
+  for _, entry in ipairs(Helper.rightSideBar) do
+    if entry.mode == "wareHistory" then
+      return -- already installed (e.g. Init() re-running on a ui reload)
+    end
+  end
+
+  local insertAt = #Helper.rightSideBar + 1
+  for i, entry in ipairs(Helper.rightSideBar) do
+    if entry.mode == "transactions" then
+      insertAt = i
+      break
+    end
+  end
+  table.insert(Helper.rightSideBar, insertAt, {
+    name = ReadText(1972092430, 1004),
+    icon = "pi_statistics",
+    mode = "wareHistory",
+  })
+
+  if not Helper.__swhButtonRightBarPatched then
+    local originalButtonRightBar = Helper.buttonRightBar
+    Helper.buttonRightBar = function (container, currentmode, callback, selfcallback, mode, row)
+      if mode == "wareHistory" then
+        if mode ~= currentmode then
+          menu.shown = false
+          callback("StationWareHistoryMenu", { 0, 0, container })
+        elseif selfcallback then
+          selfcallback()
+        end
+        return
+      end
+      return originalButtonRightBar(container, currentmode, callback, selfcallback, mode, row)
+    end
+    Helper.__swhButtonRightBarPatched = true
+  end
 end
 
 -- *** Helpers ***
@@ -411,6 +480,15 @@ end
 
 -- *** Frame construction ***
 
+-- Mirrors TransactionLogMenu's own menu.buttonRightBar: navigating to another
+-- right-side-bar entry (Trade, Overview, Configuration, ...) from within our
+-- menu closes us and opens the target with noreturn=true, so the target
+-- inherits whatever back-target we ourselves had (see onOpenMenuEvent).
+function menu.buttonRightBar(newmenu, params)
+  Helper.closeMenuAndOpenNewMenu(menu, newmenu, params, true)
+  menu.cleanup()
+end
+
 function menu.createFrame()
   Helper.clearDataForRefresh(menu, config.infoLayer)
 
@@ -425,7 +503,44 @@ function menu.createFrame()
   menu.infoFrame = Helper.createFrameHandle(menu, frameProperties)
   menu.infoFrame:setBackground("solid", { color = Color["frame_background_semitransparent"] })
 
+  -- Live 64-bit ref for the selected station, needed to mirror the right side
+  -- bar (Trade/Overview/Configuration/...) the same way TransactionLogMenu
+  -- does. Sourced from the collector's per-station cache, refreshed every
+  -- collection cycle -- nil right after a fresh load before the first
+  -- collection pass, or if the station no longer exists; the bar is simply
+  -- omitted in that case rather than erroring.
+  local stationLuaId = (menu.selectedIdcode ~= nil) and swh.getStationLuaId(menu.selectedIdcode) or nil
+  menu.container = (stationLuaId ~= nil) and ConvertIDTo64Bit(stationLuaId) or nil
+
+  -- Mirrors TransactionLogMenu's own createFrame ordering exactly: the right
+  -- side bar is created first (before any of our own content tables), and its
+  -- table is wired into the tab-navigation chain via addConnection.
+  --
+  -- Helper.createRightSideBar's signature itself changed in 9.00 (diffed
+  -- directly against extracted/8.00 and extracted/9.00's helper.lua):
+  --   8.00: Helper.createRightSideBar(frame, container, condition, currentmode, callback, selfcallback)
+  --   9.00: Helper.createRightSideBar(menu, frame, container, condition, currentmode, callback, selfcallback, refreshcallback)
+  -- 9.00 inserted `menu` as a new first parameter (and an unused trailing
+  -- refreshcallback). Calling the 9.00 form under 8.00 shifts every argument
+  -- one slot left -- our `menu` table lands in the `frame` slot, so the
+  -- function's internal `frame:addTable(...)` becomes `menu:addTable(...)`,
+  -- which doesn't exist. This is exactly what crashed before this fix.
+  local showSidebar = (menu.container ~= nil)
+  if showSidebar then
+    menu.sidebarWidth = Helper.scaleX(Helper.sidebarWidth)
+    local rightbartable
+    if swh.isV9 then
+      rightbartable = Helper.createRightSideBar(menu, menu.infoFrame, menu.container, true, "wareHistory", menu.buttonRightBar)
+    else
+      rightbartable = Helper.createRightSideBar(menu.infoFrame, menu.container, true, "wareHistory", menu.buttonRightBar)
+    end
+    rightbartable:addConnection(1, 4, true)
+  end
+
   local usableWidth = Helper.viewWidth - 2 * Helper.frameBorder
+  if showSidebar then
+    usableWidth = usableWidth - menu.sidebarWidth - Helper.borderSize
+  end
   local leftWidth   = Helper.round(usableWidth * 0.3)
   local graphX      = Helper.frameBorder + leftWidth + Helper.borderSize
   local graphWidth  = usableWidth - leftWidth - Helper.borderSize
@@ -653,6 +768,7 @@ end
 
 local function Init()
   init()
+  installRightSideBarEntry()
   RegisterEvent("StationWareHistory.OpenMenu", onOpenMenuEvent)
 end
 
