@@ -1,0 +1,114 @@
+[h1]Station Ware History[/h1]
+
+Periodically samples ware stock on every player-owned station and lets you graph the history per station. Tracks both the raw stock amount and the reservation-corrected amount (accounting for pending buy/sell trades), with a configurable sampling interval and retention window. Access via the station's right-click interaction menu, or via a dedicated entry in the station menu's right-side bar.
+
+[h2][b]Features[/b][/h2]
+[list]
+[*] [b]Per-station, per-ware history[/b]: Tracks every ware a station produces, consumes, trades, or needs for its workforce - including wares currently sitting at zero stock - not just whatever happens to be in cargo at sample time.
+[*] [b]Real Amount and With Reservations, both stored[/b]: Every sample stores the raw stock amount [i]and[/i] the reservation-corrected amount (buy reservations subtract stock about to leave, sell reservations add stock about to arrive). Switching which one you view never requires re-collecting history.
+[*] [b]Graph menu[/b]: A standalone menu (opened from the station's interaction menu, or from a [b]Station Ware History[/b] icon in the station's right-side bar) with a station dropdown, a checkbox per tracked ware (up to 8 shown at once), and a multi-series graph.
+[*] [b]Display modes[/b]: View [b]Real Amount[/b], [b]With Reservations[/b], or [b]Both[/b] (two lines per shown ware) per ware.
+[*] [b]Show Less / Show More zoom[/b]: Continuous doubling/halving of the visible time window, floored at 15 minutes and capped by however much history the selected station actually has - no fixed step list.
+[*] [b]Stays honest about stale data[/b]: The graph's time axis is always anchored on the current time, so "show more"/"show less" mean exactly what they say. If data collection has been turned off for a while, each line visibly stops short of "now" instead of misleadingly stretching to the present; if nothing was collected within the visible window at all, the graph says so instead of drawing a blank line.
+[*] [b]Configurable sampling interval and retention[/b]: Collection interval from 1 to 10 minutes (default 5); retention window from 10 to 120 hours (default 48). Disabled by default - turn it on in the extension options when you want to start tracking.
+[*] [b]Clear Data[/b]: An extension-options button to permanently wipe all recorded history, gated behind a confirmation checkbox and only available while data collection is disabled.
+[*] [b]Compatible with X4 8.00 and 9.00[/b].
+[/list]
+[h2][b]Requirements[/b][/h2]
+[list]
+[*] [b]X4: Foundations[/b]: Version [b]8.00[/b] or higher.
+[*] [b]Mod Support APIs[/b]: Version 1.95 or higher by [url=https://next.nexusmods.com/profile/sirnukes?gameId=2659]SirNukes[/url]:
+[list]
+[*] Available on Steam: [url=https://steamcommunity.com/sharedfiles/filedetails/?id=2042901274]SirNukes Mod Support APIs[/url]
+[*] Available on Nexus Mods: [url=https://www.nexusmods.com/x4foundations/mods/503]Mod Support APIs[/url]
+[/list]
+[*] [b]Options Helper[/b]: Version 1.10 or higher by [url=https://next.nexusmods.com/profile/ChemODun/mods?gameId=2659]Chem O`Dun[/url]:
+[list]
+[*] Available on Steam: [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3715253556]Options Helper[/url]
+[*] Available on Nexus Mods: [url=https://www.nexusmods.com/x4foundations/mods/2089]Options Helper[/url]
+[/list]
+[/list]
+[h2][b]Installation[/b][/h2]
+[list]
+[*] [b]Steam Workshop[/b]: [url=https://steamcommunity.com/sharedfiles/filedetails/?id=0]All Ships with Filters[/url]
+[*] [b]Nexus Mods[/b]: [url=https://www.nexusmods.com/x4foundations/mods/2178]All Ships with Filters[/url]
+[/list]
+[h2][b]Usage[/b][/h2]
+
+[h2]Enabling data collection[/h2]
+
+Data collection is [b]disabled by default[/b]. Open [b]Options Menu > Extension Options > Station Ware History[/b] and enable [b]Enable Data Collection[/b] to start sampling. Adjust [b]Collection Interval[/b] (1-10 minutes) and [b]Retention Period[/b] (10-120 hours) as needed.
+
+[img]https://raw.githubusercontent.com/chemodun/X4-StationWareHistory/refs/heads/main/docs/images/extension_options.png[/img]
+
+[h2]Graph Limitations[/h2]
+
+Due to engine limitations on total data points, graph capacity depends on your display settings:
+[list]
+[*] Absolute Maximum: Up to 8 wares simultaneously under ideal conditions.
+[*] Standard Limit: No more than 5 wares under normal use.
+[*] "Both" Mode: Limited to 2 wares (since this mode doubles the lines per ware).
+[/list]
+When the limit ill be reached, checkboxes for additional wares will be disabled.
+
+[h2]Opening the history graph[/h2]
+[list]
+[*] Right-click any player-owned station and choose [b]Show Ware History[/b] from the interaction menu.
+[/list]
+  [img]https://raw.githubusercontent.com/chemodun/X4-StationWareHistory/refs/heads/main/docs/images/interaction_menu.png[/img]
+[list]
+[*] Or open any of that station's menus ([b]Station configuration[/b], [b]Logical station overview[/b], [b]Transaction Log[/b]) and click the **Station
+[/list]
+  [img]https://raw.githubusercontent.com/chemodun/X4-StationWareHistory/refs/heads/main/docs/images/station_menus_right_bar.png[/img]
+
+[h2]The graph menu[/h2]
+[list]
+[*] [b]Station[/b]: Switch between any player-owned station with recorded history without closing the menu. Display mode and zoom carry over to the new station (re-clamped to its own data range); selected wares are kept only where they also exist on the new station.
+[*] [b]Display[/b]: Choose [b]Real Amount[/b], [b]With Reservations[/b], or [b]Both[/b].
+[list]
+[*] [b]With Reservations[/b] is a default option that shows the stock amount as it should be once all pending trades are executed.
+[*] [b]Both[/b] is unavailable once 3 or more wares are checked.
+[/list]
+[/list]
+  [img]https://raw.githubusercontent.com/chemodun/X4-StationWareHistory/refs/heads/main/docs/images/selection_value_types.png[/img]
+[list]
+[*] [b]Wares[/b]: Check up to 8 wares (4 in "Both" mode) to plot. Each gets its own colour, assigned in the order you check them and remembered across reopens.
+[*] [b]Show Less / Show More[/b]: Shrink or widen the visible time window. "Show More" disables once the window already covers the station's full recorded history.
+[/list]
+[h2]Example graph[/h2]
+[list]
+[*] Four wares with real amount:
+[/list]
+  [img]https://raw.githubusercontent.com/chemodun/X4-StationWareHistory/refs/heads/main/docs/images/graph_with_real_values.png[/img]
+[list]
+[*] Same station and wares with reservations instead of real amount:
+[/list]
+  [img]https://raw.githubusercontent.com/chemodun/X4-StationWareHistory/refs/heads/main/docs/images/graph_with_reservations.png[/img]
+[list]
+[*] Same station and two wares with both real and reservation-corrected values:
+[/list]
+  [img]https://raw.githubusercontent.com/chemodun/X4-StationWareHistory/refs/heads/main/docs/images/graph_with_both_value_types.png[/img]
+
+[h2]Clear Data[/h2]
+
+[b]Options Menu > Extension Options > Station Ware History > Clear Data[/b]: with data collection disabled, tick [b]Confirm Clearing Collected Data[/b] and click [b]Clear Data[/b] to permanently delete all recorded history for every station.
+
+[h2][b]Credits[/b][/h2]
+[list]
+[*] [b]Author[/b]: Chem O`Dun, on [url=https://next.nexusmods.com/profile/ChemODun/mods?gameId=2659]Nexus Mods[/url] and [url=https://steamcommunity.com/id/chemodun/myworkshopfiles/?appid=392160]Steam Workshop[/url]
+[*] [i]"X4: Foundations"[/i] is a trademark of [url=https://www.egosoft.com]Egosoft[/url].
+[/list]
+[h2][b]Acknowledgements[/b][/h2]
+[list]
+[*] [url=https://www.egosoft.com]EGOSOFT[/url] - for the X series.
+[*] [url=https://next.nexusmods.com/profile/sirnukes?gameId=2659]SirNukes[/url] - for the [b]Mod Support APIs[/b] that power the interaction menu, options menu, and timer.
+[/list]
+[h2][b]Changelog[/b][/h2]
+
+[h2][8.00.01] - 2026-06-20[/h2]
+[list]
+[*] [b]Added[/b]
+[list]
+[*] Initial version: data collection, graph menu, configurable interval/retention, Clear Data.
+[/list]
+[/list]
