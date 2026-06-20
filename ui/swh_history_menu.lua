@@ -696,7 +696,8 @@ end
 
 function menu.createLeftPanel(x, width, ctx)
   local leftTable = menu.infoFrame:addTable(2, { tabOrder = 1, width = width, x = x, y = Helper.frameBorder, borderEnabled = true, backgroundID = "solid", backgroundColor = Color["frame_background_semitransparent"] })
-  leftTable:setColWidth(1, Helper.standardButtonHeight)
+  local firstColumnWidth = Helper.scaleX(Helper.standardTextHeight)
+  leftTable:setColWidth(1, firstColumnWidth)
 
   local row = leftTable:addRow(false, { fixed = true, bgColor = Color["row_title_background"] })
   row[1]:setColSpan(2):createText(ReadText(1972092430, 1010), Helper.titleTextProperties)
@@ -773,9 +774,9 @@ function menu.createLeftPanel(x, width, ctx)
       for _, wareId in ipairs(wareList) do
         local wareName = GetWareData(wareId, "name") or wareId
         local isShown = menu.shownWares[wareId] == true
-        row = leftTable:addRow("ware_" .. wareId, {})
-        row[1]:createCheckBox(isShown, { height = Helper.standardTextHeight, active = isShown or allowMore })
-        row[1].handlers.onClick = function (_, checked) return menu.checkboxWareToggled(wareId, checked) end
+        row = leftTable:addRow("ware_" .. wareId, { width})
+        row[1]:createCheckBox(isShown, { scaling = false, active = isShown or allowMore })
+        row[1].handlers.onClick = function(_, checked) return menu.checkboxWareToggled(wareId, checked) end
         row[2]:createText(wareName, { halign = "left" })
       end
     end
