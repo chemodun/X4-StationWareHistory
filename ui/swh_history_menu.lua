@@ -165,39 +165,94 @@ end
 
 -- *** Helpers ***
 
--- Stable colour per ware: index into the full (sorted) ware list for the
--- selected station, not into the selection order, so a ware keeps its colour
--- across checkbox toggles. Used in "real"/"res" mode (1 line/ware, full
--- 8-colour palette).
-local function colorForWare(wareList, wareId)
-  for i, w in ipairs(wareList) do
-    if w == wareId then
-      return config.seriesColors[((i - 1) % #config.seriesColors) + 1]
-    end
+-- *** Ware -> colour assignment ***
+--
+-- A stateful FIFO pool, not an index-into-the-sorted-ware-list lookup: colour
+-- assignment now depends on the *order wares were checked*, not their
+-- alphabetical position, so it survives the ware list itself changing shape
+-- (e.g. a new ware appearing higher up alphabetically no longer reshuffles
+-- everyone else's colour).
+--
+-- menu.colorPool   -- ordered list of currently unassigned colours (never
+--                     shuffled: always drawn from the front, returned to the
+--                     back).
+-- menu.wareColors  -- table[wareId] = { color, [color2] }; color2 only present
+--                     while dataMode == "both" (one colour per plotted line).
+--
+-- Both persist on the menu table across closes/reopens and station switches
+-- exactly like shownWares/dataMode/zoomMinutes (menu.cleanup() doesn't touch
+-- them), so re-showing the same ware -- whether because the menu reopened on
+-- the same station, or because it survived a dropdown station switch -- finds
+-- its previous colour(s) still allocated and never touches the pool for it.
+-- Freshly reset alongside shownWares wherever that happens (see onShowMenu).
+local function freshColorPool()
+  local pool = {}
+  for i = 1, #config.seriesColors do
+    pool[i] = config.seriesColors[i]
   end
-  return config.seriesColors[1]
-end
-
--- Paired colours for "both" mode (2 lines/ware): ware i gets the (2i-1)th
--- colour for "real" and the 2i-th for "res", wrapping every 4 wares (8 colours
--- / 2 per ware). Mirrors vanilla's own buy/sell colour pairing in
--- ego_detailmonitor/menu_station_overview.lua's config.graph.datarecordcolors
--- (which pairs graph_data_1/2, 3/4, 5/6, 7/8 the same way, also capped at 4
--- simultaneous paired series for the same reason: 8 colours / 2 per item).
-local function colorPairForWare(wareList, wareId)
-  local pairCount = math.floor(#config.seriesColors / 2)
-  for i, w in ipairs(wareList) do
-    if w == wareId then
-      local pairIdx = (i - 1) % pairCount
-      return config.seriesColors[pairIdx * 2 + 1], config.seriesColors[pairIdx * 2 + 2]
-    end
-  end
-  return config.seriesColors[1], config.seriesColors[2]
+  return pool
 end
 
 -- How many graph lines one shown ware costs in a given display mode.
 local function linesPerWare(dataMode)
   return (dataMode == "both") and 2 or 1
+end
+
+-- Reconciles menu.wareColors/menu.colorPool against the current
+-- shownWares/dataMode. Must be called after anything that changes either:
+-- checkboxWareToggled, buttonStationSelected (which can drop wares that don't
+-- exist on the new station), buttonDataModeSelected (which resizes every
+-- shown ware's allocation to linesPerWare(dataMode)), and once from
+-- onShowMenu so a freshly initialised pool/map is in place before the first
+-- render.
+--   - Any ware in wareColors that's no longer in shownWares: release all of
+--     its colours back to the end of the pool (in storage order), drop it.
+--   - Any ware in shownWares: top its colour list up to (or trim it down to)
+--     exactly linesPerWare(dataMode) entries, taking from the front of the
+--     pool / returning excess to the back of the pool.
+local function syncWareColorPool()
+  if menu.colorPool == nil then
+    menu.colorPool = freshColorPool()
+  end
+  if menu.wareColors == nil then
+    menu.wareColors = {}
+  end
+
+  for wareId, colors in pairs(menu.wareColors) do
+    if not menu.shownWares[wareId] then
+      for _, color in ipairs(colors) do
+        menu.colorPool[#menu.colorPool + 1] = color
+      end
+      menu.wareColors[wareId] = nil
+    end
+  end
+
+  local needed = linesPerWare(menu.dataMode)
+  for wareId in pairs(menu.shownWares) do
+    local colors = menu.wareColors[wareId]
+    if colors == nil then
+      colors = {}
+      menu.wareColors[wareId] = colors
+    end
+    while (#colors < needed) and (#menu.colorPool > 0) do
+      colors[#colors + 1] = table.remove(menu.colorPool, 1)
+    end
+    while #colors > needed do
+      menu.colorPool[#menu.colorPool + 1] = table.remove(colors)
+    end
+  end
+end
+
+-- Currently allocated colour(s) for a shown ware -- { realColor } in
+-- "real"/"res" mode, { realColor, resColor } in "both" mode. Falls back to
+-- the first palette colour if called for a ware with no allocation (should
+-- not happen in normal flow: syncWareColorPool() always runs before render).
+local function getWareColors(wareId)
+  local colors = menu.wareColors and menu.wareColors[wareId]
+  if colors == nil or #colors == 0 then
+    return { config.seriesColors[1] }
+  end
+  return colors
 end
 
 -- Effective ware-count thresholds for the current display mode: in "both"
@@ -485,7 +540,10 @@ function menu.onShowMenu()
     menu.shownWares = {}
     menu.dataMode = config.defaultDataMode
     setDefaultZoomForStation()
+    menu.colorPool = freshColorPool()
+    menu.wareColors = {}
   end
+  syncWareColorPool()
 
   menu.createFrame()
 end
@@ -523,6 +581,7 @@ function menu.buttonStationSelected(_, idcode)
         menu.shownWares[wareId] = nil
       end
     end
+    syncWareColorPool()
 
     menu.refreshInfoFrame()
   end
@@ -538,6 +597,7 @@ function menu.checkboxWareToggled(wareId, checked)
   else
     menu.shownWares[wareId] = nil
   end
+  syncWareColorPool()
   menu.refreshInfoFrame()
 end
 
@@ -554,6 +614,7 @@ end
 function menu.buttonDataModeSelected(_, mode)
   if mode ~= menu.dataMode then
     menu.dataMode = mode
+    syncWareColorPool()
     menu.refreshInfoFrame()
   end
 end
@@ -763,22 +824,21 @@ function menu.createGraphPanel(x, width, ctx)
   end
 
   local maxY = 1
-  local wareList = (menu.selectedIdcode ~= nil) and swh.getWaresForStation(menu.selectedIdcode) or {}
   for _, line in ipairs(lines) do
     local points = line.points
     if caps ~= nil and #points > caps[line.id] then
       points = decimatePoints(points, caps[line.id])
     end
 
+    local wareColors = getWareColors(line.wareId)
     local color
     local wareName = GetWareData(line.wareId, "name") or line.wareId
     local mouseOverText = wareName
     if menu.dataMode == "both" then
-      local realColor, resColor = colorPairForWare(wareList, line.wareId)
-      color = (line.key == "real") and realColor or resColor
+      color = (line.key == "real") and wareColors[1] or (wareColors[2] or wareColors[1])
       mouseOverText = wareName .. " (" .. ReadText(1972092430, (line.key == "real") and 1022 or 1023) .. ")"
     else
-      color = colorForWare(wareList, line.wareId)
+      color = wareColors[1]
     end
 
     local datarecord = menu.graph:addDataRecord({
