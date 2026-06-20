@@ -124,12 +124,12 @@ end
 -- station_storage_allocation/ui/station_storage_allocation.lua.
 local function relevantWareSet(objId64)
   local wareSet = {}
-  local products, allresources, tradewares = GetComponentData(objId64, "products", "allresources", "tradewares")
+  local products, allResources, tradewares = GetComponentData(objId64, "products", "allresources", "tradewares")
   if products then
     for _, wareId in ipairs(products) do wareSet[wareId] = true end
   end
-  if allresources then
-    for _, wareId in ipairs(allresources) do wareSet[wareId] = true end
+  if allResources then
+    for _, wareId in ipairs(allResources) do wareSet[wareId] = true end
   end
   if tradewares then
     for _, wareId in ipairs(tradewares) do wareSet[wareId] = true end
