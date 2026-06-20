@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- French -->
+<diff>
+    <add sel="/language">
+        <page id="1972092430" title="Station Ware History" descr="" voice="no">
+            <!-- mod identity -->
+            <t id="1">Historique des marchandises de station</t>
+            <t id="2">Échantillonne périodiquement le stock de marchandises de chaque station appartenant au joueur et vous permet de visualiser l'historique par station. Accessible via le menu d'interaction (clic droit) de la station.</t>
+
+            <!-- Interaction menu action (1004) -->
+            <t id="1004">Afficher l'historique des marchandises</t>
+
+            <!-- Ware History menu (1010) -->
+            <t id="1010">Historique des marchandises</t>
+            <t id="1011">Station</t>
+            <t id="1012">Marchandises</t>
+            <t id="1014">Aucune marchandise avec un historique enregistré sur cette station.</t>
+            <t id="1015">Quantité</t>
+            <t id="1016">Sélectionnez une station pour afficher son historique de marchandises.</t>
+            <t id="1017">Affichage</t>
+            <t id="1018">Quantité réelle</t>
+            <t id="1019">Avec réservations</t>
+            <t id="1020">Les deux</t>
+            <t id="1021">Indisponible lorsque 3 marchandises ou plus sont sélectionnées.</t>
+            <t id="1022">Réel</t>
+            <t id="1023">Réservé</t>
+            <t id="1026">Aucune donnée collectée dans la période sélectionnée. Essayez « Afficher plus ».</t>
+
+            <!-- Master switch (90001) -->
+            <t id="90001">Activer la collecte de données</t>
+
+            <!-- Section: Data Collection (90100) -->
+            <t id="90100">Collecte de données</t>
+            <t id="90101">Intervalle de collecte</t>
+            <t id="90102">Période de conservation</t>
+
+            <!-- Section: Clear Data (90300) -->
+            <t id="90300">Effacer les données</t>
+            <t id="90310">Confirmer l'effacement des données collectées</t>
+            <t id="90311">Supprime définitivement tout l'historique des marchandises enregistré pour toutes les stations.</t>
+            <t id="90312">Effacer les données</t>
+
+            <!-- Section: Debug (90200) -->
+            <t id="90200">Débogage</t>
+            <t id="90210">Niveau de débogage</t>
+            <t id="90211">Aucun</t>
+            <t id="90212">Débogage</t>
+            <t id="90213">Trace</t>
+        </page>
+    </add>
+</diff>

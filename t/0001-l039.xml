@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Italian -->
+<diff>
+    <add sel="/language">
+        <page id="1972092430" title="Station Ware History" descr="" voice="no">
+            <!-- mod identity -->
+            <t id="1">Cronologia merci della stazione</t>
+            <t id="2">Campiona periodicamente le scorte di merci di ogni stazione di proprietà del giocatore e ti permette di visualizzare la cronologia in un grafico per stazione. Accessibile tramite il menu di interazione (clic destro) della stazione.</t>
+
+            <!-- Interaction menu action (1004) -->
+            <t id="1004">Mostra cronologia merci</t>
+
+            <!-- Ware History menu (1010) -->
+            <t id="1010">Cronologia merci</t>
+            <t id="1011">Stazione</t>
+            <t id="1012">Merci</t>
+            <t id="1014">Nessuna merce con cronologia registrata su questa stazione.</t>
+            <t id="1015">Quantità</t>
+            <t id="1016">Seleziona una stazione per visualizzare la sua cronologia delle merci.</t>
+            <t id="1017">Visualizzazione</t>
+            <t id="1018">Quantità reale</t>
+            <t id="1019">Con prenotazioni</t>
+            <t id="1020">Entrambe</t>
+            <t id="1021">Non disponibile quando sono selezionate 3 o più merci.</t>
+            <t id="1022">Reale</t>
+            <t id="1023">Riservato</t>
+            <t id="1026">Nessun dato raccolto nell'intervallo di tempo selezionato. Prova "Mostra di più".</t>
+
+            <!-- Master switch (90001) -->
+            <t id="90001">Attiva raccolta dati</t>
+
+            <!-- Section: Data Collection (90100) -->
+            <t id="90100">Raccolta dati</t>
+            <t id="90101">Intervallo di raccolta</t>
+            <t id="90102">Periodo di conservazione</t>
+
+            <!-- Section: Clear Data (90300) -->
+            <t id="90300">Cancella dati</t>
+            <t id="90310">Conferma cancellazione dei dati raccolti</t>
+            <t id="90311">Elimina permanentemente tutta la cronologia delle merci registrata per ogni stazione.</t>
+            <t id="90312">Cancella dati</t>
+
+            <!-- Section: Debug (90200) -->
+            <t id="90200">Debug</t>
+            <t id="90210">Livello di debug</t>
+            <t id="90211">Nessuno</t>
+            <t id="90212">Debug</t>
+            <t id="90213">Traccia</t>
+        </page>
+    </add>
+</diff>

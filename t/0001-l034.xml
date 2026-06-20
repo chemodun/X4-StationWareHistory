@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Spanish -->
+<diff>
+    <add sel="/language">
+        <page id="1972092430" title="Station Ware History" descr="" voice="no">
+            <!-- mod identity -->
+            <t id="1">Historial de mercancías de la estación</t>
+            <t id="2">Muestra periódicamente las existencias de mercancías de cada estación propiedad del jugador y te permite ver el historial gráfico por estación. Accede mediante el menú de interacción (clic derecho) de la estación.</t>
+
+            <!-- Interaction menu action (1004) -->
+            <t id="1004">Mostrar historial de mercancías</t>
+
+            <!-- Ware History menu (1010) -->
+            <t id="1010">Historial de mercancías</t>
+            <t id="1011">Estación</t>
+            <t id="1012">Mercancías</t>
+            <t id="1014">No hay mercancías con historial registrado en esta estación.</t>
+            <t id="1015">Cantidad</t>
+            <t id="1016">Selecciona una estación para ver su historial de mercancías.</t>
+            <t id="1017">Visualización</t>
+            <t id="1018">Cantidad real</t>
+            <t id="1019">Con reservas</t>
+            <t id="1020">Ambas</t>
+            <t id="1021">No disponible si hay 3 o más mercancías seleccionadas.</t>
+            <t id="1022">Real</t>
+            <t id="1023">Reservado</t>
+            <t id="1026">No se han recopilado datos en el intervalo de tiempo seleccionado. Prueba "Mostrar más".</t>
+
+            <!-- Master switch (90001) -->
+            <t id="90001">Activar la recopilación de datos</t>
+
+            <!-- Section: Data Collection (90100) -->
+            <t id="90100">Recopilación de datos</t>
+            <t id="90101">Intervalo de recopilación</t>
+            <t id="90102">Periodo de retención</t>
+
+            <!-- Section: Clear Data (90300) -->
+            <t id="90300">Borrar datos</t>
+            <t id="90310">Confirmar el borrado de los datos recopilados</t>
+            <t id="90311">Elimina permanentemente todo el historial de mercancías registrado de todas las estaciones.</t>
+            <t id="90312">Borrar datos</t>
+
+            <!-- Section: Debug (90200) -->
+            <t id="90200">Depuración</t>
+            <t id="90210">Nivel de depuración</t>
+            <t id="90211">Ninguno</t>
+            <t id="90212">Depuración</t>
+            <t id="90213">Traza</t>
+        </page>
+    </add>
+</diff>

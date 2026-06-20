@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Turkish -->
+<diff>
+    <add sel="/language">
+        <page id="1972092430" title="Station Ware History" descr="" voice="no">
+            <!-- mod identity -->
+            <t id="1">İstasyon Mal Geçmişi</t>
+            <t id="2">Oyuncuya ait her istasyondaki mal stoğunu periyodik olarak örnekler ve istasyon başına geçmişi grafik olarak görüntülemenizi sağlar. İstasyonun sağ tık etkileşim menüsü üzerinden erişilir.</t>
+
+            <!-- Interaction menu action (1004) -->
+            <t id="1004">Mal Geçmişini Göster</t>
+
+            <!-- Ware History menu (1010) -->
+            <t id="1010">Mal Geçmişi</t>
+            <t id="1011">İstasyon</t>
+            <t id="1012">Mallar</t>
+            <t id="1014">Bu istasyonda kayıtlı geçmişi olan mal yok.</t>
+            <t id="1015">Miktar</t>
+            <t id="1016">Mal geçmişini görüntülemek için bir istasyon seçin.</t>
+            <t id="1017">Görünüm</t>
+            <t id="1018">Gerçek Miktar</t>
+            <t id="1019">Rezervasyonlarla</t>
+            <t id="1020">Her İkisi</t>
+            <t id="1021">3 veya daha fazla mal seçiliyken kullanılamaz.</t>
+            <t id="1022">Gerçek</t>
+            <t id="1023">Rezerve</t>
+            <t id="1026">Seçilen zaman aralığında hiçbir veri toplanmadı. "Daha Fazla Göster"i deneyin.</t>
+
+            <!-- Master switch (90001) -->
+            <t id="90001">Veri Toplamayı Etkinleştir</t>
+
+            <!-- Section: Data Collection (90100) -->
+            <t id="90100">Veri Toplama</t>
+            <t id="90101">Toplama Aralığı</t>
+            <t id="90102">Saklama Süresi</t>
+
+            <!-- Section: Clear Data (90300) -->
+            <t id="90300">Verileri Temizle</t>
+            <t id="90310">Toplanan Verilerin Temizlenmesini Onayla</t>
+            <t id="90311">Tüm istasyonlar için kayıtlı tüm mal geçmişini kalıcı olarak siler.</t>
+            <t id="90312">Verileri Temizle</t>
+
+            <!-- Section: Debug (90200) -->
+            <t id="90200">Hata Ayıklama</t>
+            <t id="90210">Hata Ayıklama Seviyesi</t>
+            <t id="90211">Yok</t>
+            <t id="90212">Hata Ayıklama</t>
+            <t id="90213">İzleme</t>
+        </page>
+    </add>
+</diff>

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Czech -->
+<diff>
+    <add sel="/language">
+        <page id="1972092430" title="Station Ware History" descr="" voice="no">
+            <!-- mod identity -->
+            <t id="1">Historie zboží stanice</t>
+            <t id="2">Periodicky vzorkuje zásoby zboží na každé stanici vlastněné hráčem a umožňuje zobrazit historii formou grafu pro každou stanici. Přístupné přes interakční nabídku stanice (pravé tlačítko myši).</t>
+
+            <!-- Interaction menu action (1004) -->
+            <t id="1004">Zobrazit historii zboží</t>
+
+            <!-- Ware History menu (1010) -->
+            <t id="1010">Historie zboží</t>
+            <t id="1011">Stanice</t>
+            <t id="1012">Zboží</t>
+            <t id="1014">Na této stanici není zaznamenána historie žádného zboží.</t>
+            <t id="1015">Množství</t>
+            <t id="1016">Vyberte stanici pro zobrazení historie jejího zboží.</t>
+            <t id="1017">Zobrazení</t>
+            <t id="1018">Skutečné množství</t>
+            <t id="1019">S rezervacemi</t>
+            <t id="1020">Obojí</t>
+            <t id="1021">Nedostupné, pokud je vybráno 3 nebo více druhů zboží.</t>
+            <t id="1022">Skutečné</t>
+            <t id="1023">Rezervováno</t>
+            <t id="1026">V vybraném časovém rozsahu nebyla shromážděna žádná data. Zkuste „Zobrazit více".</t>
+
+            <!-- Master switch (90001) -->
+            <t id="90001">Povolit sběr dat</t>
+
+            <!-- Section: Data Collection (90100) -->
+            <t id="90100">Sběr dat</t>
+            <t id="90101">Interval sběru</t>
+            <t id="90102">Doba uchování</t>
+
+            <!-- Section: Clear Data (90300) -->
+            <t id="90300">Vymazat data</t>
+            <t id="90310">Potvrdit vymazání shromážděných dat</t>
+            <t id="90311">Trvale odstraní veškerou zaznamenanou historii zboží pro všechny stanice.</t>
+            <t id="90312">Vymazat data</t>
+
+            <!-- Section: Debug (90200) -->
+            <t id="90200">Ladění</t>
+            <t id="90210">Úroveň ladění</t>
+            <t id="90211">Žádné</t>
+            <t id="90212">Ladění</t>
+            <t id="90213">Trasování</t>
+        </page>
+    </add>
+</diff>

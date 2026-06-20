@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Portuguese -->
+<diff>
+    <add sel="/language">
+        <page id="1972092430" title="Station Ware History" descr="" voice="no">
+            <!-- mod identity -->
+            <t id="1">Histórico de mercadorias da estação</t>
+            <t id="2">Amostra periodicamente o estoque de mercadorias de cada estação de propriedade do jogador e permite visualizar o histórico em gráfico por estação. Acesse pelo menu de interação da estação (clique com o botão direito).</t>
+
+            <!-- Interaction menu action (1004) -->
+            <t id="1004">Mostrar histórico de mercadorias</t>
+
+            <!-- Ware History menu (1010) -->
+            <t id="1010">Histórico de mercadorias</t>
+            <t id="1011">Estação</t>
+            <t id="1012">Mercadorias</t>
+            <t id="1014">Nenhuma mercadoria com histórico registrado nesta estação.</t>
+            <t id="1015">Quantidade</t>
+            <t id="1016">Selecione uma estação para ver seu histórico de mercadorias.</t>
+            <t id="1017">Exibição</t>
+            <t id="1018">Quantidade real</t>
+            <t id="1019">Com reservas</t>
+            <t id="1020">Ambos</t>
+            <t id="1021">Indisponível quando 3 ou mais mercadorias estiverem selecionadas.</t>
+            <t id="1022">Real</t>
+            <t id="1023">Reservado</t>
+            <t id="1026">Nenhum dado coletado no intervalo de tempo selecionado. Tente "Mostrar mais".</t>
+
+            <!-- Master switch (90001) -->
+            <t id="90001">Ativar coleta de dados</t>
+
+            <!-- Section: Data Collection (90100) -->
+            <t id="90100">Coleta de dados</t>
+            <t id="90101">Intervalo de coleta</t>
+            <t id="90102">Período de retenção</t>
+
+            <!-- Section: Clear Data (90300) -->
+            <t id="90300">Limpar dados</t>
+            <t id="90310">Confirmar limpeza dos dados coletados</t>
+            <t id="90311">Exclui permanentemente todo o histórico de mercadorias registrado para todas as estações.</t>
+            <t id="90312">Limpar dados</t>
+
+            <!-- Section: Debug (90200) -->
+            <t id="90200">Depuração</t>
+            <t id="90210">Nível de depuração</t>
+            <t id="90211">Nenhum</t>
+            <t id="90212">Depuração</t>
+            <t id="90213">Rastreamento</t>
+        </page>
+    </add>
+</diff>

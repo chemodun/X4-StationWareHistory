@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Polish -->
+<diff>
+    <add sel="/language">
+        <page id="1972092430" title="Station Ware History" descr="" voice="no">
+            <!-- mod identity -->
+            <t id="1">Historia towarów stacji</t>
+            <t id="2">Okresowo próbkuje zapasy towarów na każdej stacji należącej do gracza i pozwala wyświetlić historię w postaci wykresu dla każdej stacji. Dostęp poprzez menu interakcji stacji (prawy przycisk myszy).</t>
+
+            <!-- Interaction menu action (1004) -->
+            <t id="1004">Pokaż historię towarów</t>
+
+            <!-- Ware History menu (1010) -->
+            <t id="1010">Historia towarów</t>
+            <t id="1011">Stacja</t>
+            <t id="1012">Towary</t>
+            <t id="1014">Na tej stacji nie zarejestrowano historii żadnego towaru.</t>
+            <t id="1015">Ilość</t>
+            <t id="1016">Wybierz stację, aby wyświetlić historię jej towarów.</t>
+            <t id="1017">Wyświetlanie</t>
+            <t id="1018">Rzeczywista ilość</t>
+            <t id="1019">Z rezerwacjami</t>
+            <t id="1020">Oba</t>
+            <t id="1021">Niedostępne, gdy wybrano 3 lub więcej towarów.</t>
+            <t id="1022">Rzeczywista</t>
+            <t id="1023">Zarezerwowana</t>
+            <t id="1026">Brak danych zebranych w wybranym przedziale czasu. Spróbuj "Pokaż więcej".</t>
+
+            <!-- Master switch (90001) -->
+            <t id="90001">Włącz zbieranie danych</t>
+
+            <!-- Section: Data Collection (90100) -->
+            <t id="90100">Zbieranie danych</t>
+            <t id="90101">Interwał zbierania</t>
+            <t id="90102">Okres przechowywania</t>
+
+            <!-- Section: Clear Data (90300) -->
+            <t id="90300">Wyczyść dane</t>
+            <t id="90310">Potwierdź wyczyszczenie zebranych danych</t>
+            <t id="90311">Trwale usuwa całą zarejestrowaną historię towarów dla wszystkich stacji.</t>
+            <t id="90312">Wyczyść dane</t>
+
+            <!-- Section: Debug (90200) -->
+            <t id="90200">Debugowanie</t>
+            <t id="90210">Poziom debugowania</t>
+            <t id="90211">Brak</t>
+            <t id="90212">Debugowanie</t>
+            <t id="90213">Śledzenie</t>
+        </page>
+    </add>
+</diff>

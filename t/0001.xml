@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Station Ware History — English text, page 1972092430 -->
+<diff>
+    <add sel="/language">
+        <page id="1972092430" title="Station Ware History" descr="" voice="no">
+            <!-- mod identity -->
+            <t id="1">Station Ware History</t>
+            <t id="2">Periodically samples ware stock on every player-owned station and lets you graph the history per station. Access via the station's right-click interaction menu.</t>
+
+            <!-- Interaction menu action (1004) -->
+            <t id="1004">Show Ware History</t>
+
+            <!-- Ware History menu (1010) -->
+            <t id="1010">Ware History</t>
+            <t id="1011">Station</t>
+            <t id="1012">Wares</t>
+            <t id="1014">No wares with recorded history on this station.</t>
+            <t id="1015">Amount</t>
+            <t id="1016">Select a station to view its ware history.</t>
+            <t id="1017">Display</t>
+            <t id="1018">Real Amount</t>
+            <t id="1019">With Reservations</t>
+            <t id="1020">Both</t>
+            <t id="1021">Unavailable while 3 or more wares are selected.</t>
+            <t id="1022">Real</t>
+            <t id="1023">Reserved</t>
+            <t id="1026">No data collected within the selected time range. Try "Show More".</t>
+
+            <!-- Master switch (90001) -->
+            <t id="90001">Enable Data Collection</t>
+
+            <!-- Section: Data Collection (90100) -->
+            <t id="90100">Data Collection</t>
+            <t id="90101">Collection Interval</t>
+            <t id="90102">Retention Period</t>
+
+            <!-- Section: Clear Data (90300) -->
+            <t id="90300">Clear Data</t>
+            <t id="90310">Confirm Clearing Collected Data</t>
+            <t id="90311">Permanently delete all recorded ware history for every station.</t>
+            <t id="90312">Clear Data</t>
+
+            <!-- Section: Debug (90200) -->
+            <t id="90200">Debug</t>
+            <t id="90210">Debug Level</t>
+            <t id="90211">None</t>
+            <t id="90212">Debug</t>
+            <t id="90213">Trace</t>
+        </page>
+    </add>
+</diff>
