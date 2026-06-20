@@ -151,7 +151,6 @@ local function installRightSideBarEntry()
     Helper.buttonRightBar = function (container, currentmode, callback, selfcallback, mode, row)
       if mode == "wareHistory" then
         if mode ~= currentmode then
-          menu.shown = false
           callback("StationWareHistoryMenu", { 0, 0, container })
         elseif selfcallback then
           selfcallback()
@@ -292,29 +291,72 @@ local function fairShareCaps(entries, budget)
   return caps
 end
 
--- Downsamples an ordered (x ascending) {x=,y=} step-function point list to
--- exactly `cap` points, resampling at `cap` evenly spaced x-positions across the
--- original list's full x-range (so the first and last resampled points always
--- land exactly on the original first/last x -- the window's left and right
--- edges). Each resampled value carries forward the most recent original point
--- at/before that x (step / forward-fill semantics, matching how the underlying
--- data is actually stored): this is the lossless-as-possible reduction for a
--- piecewise-constant series -- no fabricated values, and a ware that's been
--- flat for the whole window still resamples to a flat line at the same value.
+-- Downsamples an ordered (x ascending) {x=,y=} step-function point list to at
+-- most `cap` points using min/max-per-bucket decimation (the same technique
+-- charting/monitoring tools use for this exact reason -- Highcharts' Boost
+-- module, Grafana, RRDtool, etc.): resampling at fixed x-positions instead
+-- (the previous approach here) can silently skip any excursion that falls
+-- entirely between two sample positions, making volatile data look falsely
+-- flat/smooth. Dividing the range into buckets and keeping both the minimum-
+-- and maximum-value point from each guarantees any excursion within a bucket
+-- is represented by at least its extreme value.
+--
+-- The very first and last input points are always kept verbatim (not run
+-- through bucketing) so the two continuity anchors buildPoints() adds (left
+-- edge of the window, and "now") still land exactly where they're supposed
+-- to -- losing that would undermine the whole point of having them.
+-- The remaining budget (cap - 2) is split into floor((cap-2)/2) buckets, each
+-- contributing up to 2 points (its min and max, in chronological order, or
+-- just 1 if they coincide). A bucket with no real points in it forward-fills
+-- a single point at its right edge from the last known value, rather than
+-- being skipped -- skipping it would draw a direct line between two
+-- non-adjacent points, implying a gradual ramp where the real, piecewise-
+-- constant data actually held flat and then jumped.
 local function decimatePoints(points, cap)
   if #points <= cap then
     return points
   end
-  local xStart, xEnd = points[1].x, points[#points].x
-  local result = {}
-  local srcIdx = 1
-  for i = 0, cap - 1 do
-    local sampleX = xStart + (xEnd - xStart) * (i / (cap - 1))
-    while srcIdx < #points and points[srcIdx + 1].x <= sampleX do
+  if cap <= 2 then
+    return { points[1], points[#points] }
+  end
+
+  local first, last = points[1], points[#points]
+  local numBuckets  = math.max(1, math.floor((cap - 2) / 2))
+  local xStart, xEnd = first.x, last.x
+  local bucketWidth  = (xEnd - xStart) / numBuckets
+
+  local result    = { first }
+  local lastValue = first.y
+  local srcIdx    = 2 -- index 1 (first) is already emitted
+
+  for b = 0, numBuckets - 1 do
+    local bucketEnd = (b == numBuckets - 1) and xEnd or (xStart + (b + 1) * bucketWidth)
+
+    local minPoint, maxPoint = nil, nil
+    while srcIdx < #points and points[srcIdx].x <= bucketEnd do
+      local p = points[srcIdx]
+      if minPoint == nil or p.y < minPoint.y then minPoint = p end
+      if maxPoint == nil or p.y > maxPoint.y then maxPoint = p end
       srcIdx = srcIdx + 1
     end
-    result[#result + 1] = { x = sampleX, y = points[srcIdx].y }
+
+    if minPoint == nil then
+      result[#result + 1] = { x = bucketEnd, y = lastValue }
+    elseif minPoint == maxPoint then
+      result[#result + 1] = minPoint
+      lastValue = minPoint.y
+    elseif minPoint.x <= maxPoint.x then
+      result[#result + 1] = minPoint
+      result[#result + 1] = maxPoint
+      lastValue = maxPoint.y
+    else
+      result[#result + 1] = maxPoint
+      result[#result + 1] = minPoint
+      lastValue = minPoint.y
+    end
   end
+
+  result[#result + 1] = last
   return result
 end
 
