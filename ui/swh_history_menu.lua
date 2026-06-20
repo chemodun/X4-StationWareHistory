@@ -41,19 +41,12 @@ local config = {
   infoLayer = 4,
   point = { type = "square", size = 6, highlightSize = 6 },
   line  = { type = "normal", size = 2, highlightSize = 2 },
-  -- Zoom steps in minutes (mirrors ego_detailmonitorhelper/helper.lua's
-  -- Helper.transactionLogConfig.zoomSteps), capped at the retention slider's
-  -- maximum (120h); the last entry is always labelled "All" regardless of the
-  -- user's currently configured retention. Labels are static strings rather
-  -- than Helper.formatTimeShort(seconds), which is not available in all builds.
-  zoomSteps = {
-    { zoom = 60,   granularity = 300,          label = "1h" },
-    { zoom = 360,  granularity = 1800,         label = "6h" },
-    { zoom = 1440, granularity = 3600,         label = "24h" },
-    { zoom = 2880, granularity = 3600 * 3,     label = "48h" },
-    { zoom = 7200, granularity = 3600 * 12,    label = nil },  -- last step always shows "All"
-  },
-  defaultZoom  = 3,  -- 24h
+  -- "Show less"/"show more" zoom (mirrors the transaction log's +/- zoom, but
+  -- continuous rather than a fixed step table): menu.zoomMinutes always
+  -- doubles/halves, floored at zoomMinimumMinutes and capped only by whatever
+  -- history actually exists -- see computeStationMaxRangeMinutes().
+  zoomMinimumMinutes = 15,
+  zoomDefaultMinutes = 60,
   defaultDataMode = "res", -- "real" | "res" | "both" -- see dataMode dropdown
   maxShownWares = 8,    -- hard cap on simultaneous LINES: one per available graph_data_N color
   maxTotalPoints = 200, -- shared budget across every currently shown line; see fairShareCaps()
@@ -256,14 +249,53 @@ local function decimatePoints(points, cap)
   return result
 end
 
--- Time-window context for the currently selected zoom step, shared by the left
--- panel (checkbox-availability point count) and the graph panel (actual
--- plotting), so both agree on exactly the same window/scale.
+-- The full history span actually available for a station, in minutes: from the
+-- earliest recorded point across ANY of its tracked wares (not just currently
+-- shown ones -- this needs to be well-defined before any checkbox is ticked,
+-- e.g. to pick the initial default zoom) to "now". Returns math.huge if there's
+-- no station selected or no data at all yet, so callers that compare against it
+-- (show-more disablement, the default-zoom cap) simply don't restrict anything
+-- in that case. series are stored ascending by t, so the first entry is the
+-- earliest.
+local function computeStationMaxRangeMinutes(idcode, now)
+  if idcode == nil then
+    return math.huge
+  end
+  local earliest = nil
+  for _, wareId in ipairs(swh.getWaresForStation(idcode)) do
+    local series = swh.getSeries(idcode, wareId)
+    if #series > 0 and (earliest == nil or series[1].t < earliest) then
+      earliest = series[1].t
+    end
+  end
+  if earliest == nil then
+    return math.huge
+  end
+  return math.max(config.zoomMinimumMinutes, (now - earliest) / 60)
+end
+
+-- Display label for the current "show less"/"show more" interval. Every value
+-- in the doubling sequence starting at 15 (15,30,60,120,240,480,...) is an
+-- exact whole number of hours once >=60 (since 60 itself is in the sequence,
+-- and every later step is just 60 * 2^n) -- unlike days (1440 = 60*24, and 24
+-- is not a power of two), so this deliberately never converts to a "d" unit;
+-- large values just read as e.g. "128h" rather than introducing a fractional
+-- day count.
+local function formatZoomLabel(minutes)
+  if minutes < 60 then
+    return Helper.round(minutes) .. "m"
+  end
+  return Helper.round(minutes / 60) .. "h"
+end
+
+-- Time-window context for the current "show less"/"show more" interval,
+-- shared by the left panel (checkbox-availability point count) and the graph
+-- panel (actual plotting), so both agree on exactly the same window/scale.
 local function buildZoomContext()
   local now = C.GetCurrentGameTime()
-  local zoomStep = config.zoomSteps[menu.xZoom]
-  local startTime = math.max(0, now - (60 * zoomStep.zoom))
-  local xGranularity = zoomStep.granularity
+  local startTime = math.max(0, now - (60 * menu.zoomMinutes))
+  -- Aim for ~6 gridlines across the visible window.
+  local xGranularity = (60 * menu.zoomMinutes) / 6
 
   local graphXScale = 60
   local xUnitSuffix = "min"
@@ -309,6 +341,14 @@ end
 
 -- *** Menu lifecycle ***
 
+-- Default zoom for the (newly) selected station: 1h, unless its actual
+-- recorded history is shorter, in which case use that instead (still floored
+-- at zoomMinimumMinutes).
+local function setDefaultZoomForStation()
+  local maxRange = computeStationMaxRangeMinutes(menu.selectedIdcode, C.GetCurrentGameTime())
+  menu.zoomMinutes = math.max(config.zoomMinimumMinutes, math.min(config.zoomDefaultMinutes, maxRange))
+end
+
 function menu.onShowMenu()
   local stationId64 = menu.param[3]
   menu.selectedIdcode = nil
@@ -316,8 +356,8 @@ function menu.onShowMenu()
     menu.selectedIdcode = GetComponentData(stationId64, "idcode")
   end
   menu.shownWares = {}
-  menu.xZoom = config.defaultZoom
   menu.dataMode = config.defaultDataMode
+  setDefaultZoomForStation()
   menu.createFrame()
 end
 
@@ -334,6 +374,7 @@ function menu.buttonStationSelected(_, idcode)
   if idcode ~= menu.selectedIdcode then
     menu.selectedIdcode = idcode
     menu.shownWares = {}
+    setDefaultZoomForStation()
     menu.refreshInfoFrame()
   end
 end
@@ -351,8 +392,13 @@ function menu.checkboxWareToggled(wareId, checked)
   menu.refreshInfoFrame()
 end
 
-function menu.buttonZoom(i)
-  menu.xZoom = i
+function menu.buttonZoomLess()
+  menu.zoomMinutes = math.max(config.zoomMinimumMinutes, menu.zoomMinutes / 2)
+  menu.refreshInfoFrame()
+end
+
+function menu.buttonZoomMore()
+  menu.zoomMinutes = menu.zoomMinutes * 2
   menu.refreshInfoFrame()
 end
 
@@ -569,19 +615,23 @@ function menu.createGraphPanel(x, width, ctx)
   menu.graph:setYAxis({ startvalue = 0, endvalue = maxY, granularity = granularity, gridcolor = Color["graph_grid"] })
   menu.graph:setYAxisLabel(yUnitText)
 
-  -- Time-range buttons, mirrored from the transaction log's range-selection row.
-  local table_zoom = menu.infoFrame:addTable(#config.zoomSteps, { tabOrder = 3, borderEnabled = false, width = width, x = x, y = (table_graph.properties.y + table_graph:getFullHeight() + Helper.borderSize), backgroundID = "solid", backgroundColor = Color["frame_background_semitransparent"] })
+  -- "Show less" / current interval / "show more" row, mirrored from the
+  -- transaction log's +/- zoom buttons but continuous rather than a fixed step
+  -- table. "Show less" disables at the 15-minute floor; "show more" disables
+  -- once the current interval already covers the station's full recorded
+  -- history (computeStationMaxRangeMinutes) -- doubling further wouldn't
+  -- reveal any more data.
+  local maxRangeMinutes = computeStationMaxRangeMinutes(menu.selectedIdcode, ctx.now)
+  local showLessActive  = menu.zoomMinutes > config.zoomMinimumMinutes
+  local showMoreActive  = menu.zoomMinutes < maxRangeMinutes
+
+  local table_zoom = menu.infoFrame:addTable(9, { tabOrder = 3, borderEnabled = false, width = width, x = x, y = (table_graph.properties.y + table_graph:getFullHeight() + Helper.borderSize), backgroundID = "solid", backgroundColor = Color["frame_background_semitransparent"] })
   row = table_zoom:addRow(true, { fixed = true })
-  for i = #config.zoomSteps, 1, -1 do
-    local label = (i == #config.zoomSteps) and ReadText(1001, 19) or config.zoomSteps[i].label
-    local col = #config.zoomSteps - i + 1
-    if menu.xZoom == i then
-      row[col]:createButton({ bgColor = Color["row_background_selected"] }):setText(label, { halign = "center" })
-    else
-      row[col]:createButton():setText(label, { halign = "center" })
-      row[col].handlers.onClick = function () return menu.buttonZoom(i) end
-    end
-  end
+  row[4]:createButton({ active = showLessActive }):setText(ReadText(1001, 7777), { halign = "center" })
+  row[4].handlers.onClick = function () return menu.buttonZoomLess() end
+  row[5]:createText(formatZoomLabel(menu.zoomMinutes), { halign = "center" })
+  row[6]:createButton({ active = showMoreActive }):setText(ReadText(1001, 7778), { halign = "center" })
+  row[6].handlers.onClick = function () return menu.buttonZoomMore() end
 end
 
 -- *** Standard menu callbacks ***
