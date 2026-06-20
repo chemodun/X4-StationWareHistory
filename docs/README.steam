@@ -57,7 +57,7 @@ When the limit ill be reached, checkboxes for additional wares will be disabled.
 [/list]
   [img]https://raw.githubusercontent.com/chemodun/X4-StationWareHistory/refs/heads/main/docs/images/interaction_menu.png[/img]
 [list]
-[*] Or open any of that station's menus ([b]Station configuration[/b], [b]Logical station overview[/b], [b]Transaction Log[/b]) and click the **Station
+[*] Or open any of that station's menus ([b]Station configuration[/b], [b]Logical station overview[/b], [b]Transaction Log[/b]) and click the [b]Show Ware History[/b] button in the right-side bar.
 [/list]
   [img]https://raw.githubusercontent.com/chemodun/X4-StationWareHistory/refs/heads/main/docs/images/station_menus_right_bar.png[/img]
 
