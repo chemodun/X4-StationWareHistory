@@ -19,6 +19,18 @@ ffi.cdef [[
 
 local swh = require("extensions.station_ware_history.ui.swh_collector")
 
+-- Shares swh.debugLevel (kept in sync by the options menu's debug dropdown via
+-- swh.onDebugLevelChanged) rather than tracking a second copy here.
+local function debugLog(fmt, ...)
+  if swh.debugLevel ~= "none" then
+    if select("#", ...) > 0 then
+      DebugError("[SWH] " .. string.format(fmt, ...))
+    else
+      DebugError("[SWH] " .. fmt)
+    end
+  end
+end
+
 local menu = {
   name            = "StationWareHistoryMenu",
   lastRefreshTime = 0,
@@ -42,7 +54,18 @@ local config = {
     { zoom = 7200, granularity = 3600 * 12,    label = nil },  -- last step always shows "All"
   },
   defaultZoom  = 3,  -- 24h
-  maxShownWares = 8, -- one per available graph_data_N color
+  maxShownWares = 8,    -- hard cap: one per available graph_data_N color
+  maxTotalPoints = 200, -- shared budget across every currently shown line; see fairShareCaps()
+  -- Checkbox availability (separate from maxTotalPoints/fairShareCaps, which only
+  -- decide how to downsample once something is already shown): below
+  -- wareCountSoftLimit shown wares, unchecked checkboxes always stay clickable;
+  -- at/above it, an unchecked checkbox is disabled once the *currently shown*
+  -- wares' combined full-fidelity point count reaches wareSelectionPointsBudget
+  -- (leaving headroom under maxTotalPoints before decimation would kick in for
+  -- one more line); at maxShownWares, unchecked checkboxes are always disabled,
+  -- no point counting needed.
+  wareCountSoftLimit       = 5,
+  wareSelectionPointsBudget = 160,
   seriesColors = {
     Color["graph_data_1"], Color["graph_data_2"], Color["graph_data_3"], Color["graph_data_4"],
     Color["graph_data_5"], Color["graph_data_6"], Color["graph_data_7"], Color["graph_data_8"],
@@ -84,16 +107,16 @@ local function colorForWare(wareList, wareId)
   return config.seriesColors[1]
 end
 
--- Plots one change-only series onto a graph data record, adding two carry-forward
--- anchor points so the line stays continuous even though most wares only get a
--- new stored point when their value actually changes:
---   - left edge (x = -xRange): the most recent known value at/before the visible
---     window's start, so a ware unchanged for longer than the selected zoom range
---     still draws a flat line across the whole window instead of showing nothing;
---   - right edge (x = 0 / "now"): the series' latest known value, so the line
---     reaches the present instead of stopping at whenever the value last changed.
--- ctx (mutable) carries { startTime, now, graphXScale, xRange, minY, maxY }.
-local function plotSeries(datarecord, series, ctx)
+-- Builds the full-fidelity {x=,y=} point list for one change-only series within
+-- the visible window, adding the same two carry-forward anchors as before
+-- (left edge = most recent known value at/before the window start; right edge =
+-- latest known value carried to "now") so the line stays continuous even though
+-- most wares only get a new stored point when their value actually changes.
+-- Does not touch the graph widget directly -- see decimatePoints()/fairShareCaps()
+-- below for how the result is (optionally) downsampled before being plotted, to
+-- stay under the graph's total point budget.
+-- ctx carries { startTime, now, graphXScale, xRange } (read-only here).
+local function buildPoints(series, ctx)
   local lastBefore, firstInWindowIdx = nil, nil
   for i = 1, #series do
     local point = series[i]
@@ -104,31 +127,132 @@ local function plotSeries(datarecord, series, ctx)
     end
   end
 
-  local lastPlottedX = nil
+  local points = {}
   if lastBefore ~= nil then
-    datarecord:addData(-ctx.xRange, lastBefore.v, nil, nil)
-    ctx.minY = math.min(ctx.minY, lastBefore.v)
-    ctx.maxY = math.max(ctx.maxY, lastBefore.v)
-    lastPlottedX = -ctx.xRange
+    points[#points + 1] = { x = -ctx.xRange, y = lastBefore.v }
   end
-
   if firstInWindowIdx ~= nil then
     for i = firstInWindowIdx, #series do
       local point = series[i]
-      local px = (point.t - ctx.now) / ctx.graphXScale
-      datarecord:addData(px, point.v, nil, nil)
-      ctx.minY = math.min(ctx.minY, point.v)
-      ctx.maxY = math.max(ctx.maxY, point.v)
-      lastPlottedX = px
+      points[#points + 1] = { x = (point.t - ctx.now) / ctx.graphXScale, y = point.v }
     end
   end
 
-  if lastPlottedX == nil or lastPlottedX < 0 then
-    local latestValue = series[#series].v
-    datarecord:addData(0, latestValue, nil, nil)
-    ctx.minY = math.min(ctx.minY, latestValue)
-    ctx.maxY = math.max(ctx.maxY, latestValue)
+  local lastX = (#points > 0) and points[#points].x or nil
+  if lastX == nil or lastX < 0 then
+    points[#points + 1] = { x = 0, y = series[#series].v }
   end
+  return points
+end
+
+-- Max-min fair allocation of a shared total point budget across several lines,
+-- given each line's actual point need (entries = list of { id=, need= }).
+-- Lines that need fewer points than the current fair share get exactly what
+-- they need, in full fidelity; the budget they don't use is redistributed
+-- evenly among the remaining lines (recomputed every step) until every
+-- remaining line's need meets or exceeds the current share -- those (and only
+-- those) get capped at that final share and decimated. This is the standard
+-- "progressive filling" max-min fairness algorithm: process lines ascending by
+-- need, so a line is only ever capped below its actual need once it's already
+-- larger than what an equal split of the *remaining* budget would give it.
+-- Returns: table[id] = cap (integer >= 2).
+local function fairShareCaps(entries, budget)
+  local sorted = {}
+  for _, e in ipairs(entries) do sorted[#sorted + 1] = e end
+  table.sort(sorted, function(a, b) return a.need < b.need end)
+
+  local caps = {}
+  local remainingBudget = budget
+  local remainingCount  = #sorted
+
+  for i = 1, #sorted do
+    local share = math.floor(remainingBudget / remainingCount)
+    local entry = sorted[i]
+    if entry.need <= share then
+      caps[entry.id] = entry.need
+      remainingBudget = remainingBudget - entry.need
+      remainingCount  = remainingCount - 1
+    else
+      local finalShare = math.max(2, math.floor(remainingBudget / remainingCount))
+      for j = i, #sorted do
+        caps[sorted[j].id] = finalShare
+      end
+      break
+    end
+  end
+
+  return caps
+end
+
+-- Downsamples an ordered (x ascending) {x=,y=} step-function point list to
+-- exactly `cap` points, resampling at `cap` evenly spaced x-positions across the
+-- original list's full x-range (so the first and last resampled points always
+-- land exactly on the original first/last x -- the window's left and right
+-- edges). Each resampled value carries forward the most recent original point
+-- at/before that x (step / forward-fill semantics, matching how the underlying
+-- data is actually stored): this is the lossless-as-possible reduction for a
+-- piecewise-constant series -- no fabricated values, and a ware that's been
+-- flat for the whole window still resamples to a flat line at the same value.
+local function decimatePoints(points, cap)
+  if #points <= cap then
+    return points
+  end
+  local xStart, xEnd = points[1].x, points[#points].x
+  local result = {}
+  local srcIdx = 1
+  for i = 0, cap - 1 do
+    local sampleX = xStart + (xEnd - xStart) * (i / (cap - 1))
+    while srcIdx < #points and points[srcIdx + 1].x <= sampleX do
+      srcIdx = srcIdx + 1
+    end
+    result[#result + 1] = { x = sampleX, y = points[srcIdx].y }
+  end
+  return result
+end
+
+-- Time-window context for the currently selected zoom step, shared by the left
+-- panel (checkbox-availability point count) and the graph panel (actual
+-- plotting), so both agree on exactly the same window/scale.
+local function buildZoomContext()
+  local now = C.GetCurrentGameTime()
+  local zoomStep = config.zoomSteps[menu.xZoom]
+  local startTime = math.max(0, now - (60 * zoomStep.zoom))
+  local xGranularity = zoomStep.granularity
+
+  local graphXScale = 60
+  local xUnitSuffix = "min"
+  if xGranularity >= (24 * 60 * 60) then
+    graphXScale = 24 * 3600
+    xUnitSuffix = "d"
+  elseif xGranularity >= (1 * 60 * 60) then
+    graphXScale = 3600
+    xUnitSuffix = "h"
+  end
+
+  return {
+    startTime    = startTime,
+    now          = now,
+    graphXScale  = graphXScale,
+    xRange       = (now - startTime) / graphXScale,
+    xGranularity = xGranularity,
+    xUnitSuffix  = xUnitSuffix,
+  }
+end
+
+-- Total full-fidelity point count (buildPoints, anchors included) across every
+-- currently shown ware for the selected station. Used only to decide checkbox
+-- availability -- the actual plotted points may end up lower after decimation.
+local function totalShownPoints(ctx)
+  local total = 0
+  if menu.selectedIdcode ~= nil then
+    for wareId in pairs(menu.shownWares) do
+      local series = swh.getSeries(menu.selectedIdcode, wareId)
+      if #series > 0 then
+        total = total + #buildPoints(series, ctx)
+      end
+    end
+  end
+  return total
 end
 
 -- *** Menu lifecycle ***
@@ -200,14 +324,15 @@ function menu.createFrame()
   local graphX      = Helper.frameBorder + leftWidth + Helper.borderSize
   local graphWidth  = usableWidth - leftWidth - Helper.borderSize
 
-  menu.createLeftPanel(Helper.frameBorder, leftWidth)
-  menu.createGraphPanel(graphX, graphWidth)
+  local ctx = buildZoomContext()
+  menu.createLeftPanel(Helper.frameBorder, leftWidth, ctx)
+  menu.createGraphPanel(graphX, graphWidth, ctx)
 
   menu.infoFrame:display()
   menu.lastRefreshTime = getElapsedTime()
 end
 
-function menu.createLeftPanel(x, width)
+function menu.createLeftPanel(x, width, ctx)
   local leftTable = menu.infoFrame:addTable(2, { tabOrder = 1, width = width, x = x, y = Helper.frameBorder, borderEnabled = true, backgroundID = "solid", backgroundColor = Color["frame_background_semitransparent"] })
   leftTable:setColWidth(1, Helper.standardButtonHeight)
 
@@ -249,10 +374,27 @@ function menu.createLeftPanel(x, width)
       row = leftTable:addRow(false, {})
       row[1]:setColSpan(2):createText(ReadText(1972092430, 1014), { halign = "center" })
     else
+      local shownCount = 0
+      for _ in pairs(menu.shownWares) do shownCount = shownCount + 1 end
+
+      -- Whether an unchecked checkbox may still be checked. Below the soft
+      -- limit, always; at the hard cap, never (no point counting needed); in
+      -- between, only while the currently shown wares' combined point count
+      -- stays under the budget.
+      local allowMore
+      if shownCount >= config.maxShownWares then
+        allowMore = false
+      elseif shownCount >= config.wareCountSoftLimit then
+        allowMore = totalShownPoints(ctx) < config.wareSelectionPointsBudget
+      else
+        allowMore = true
+      end
+
       for _, wareId in ipairs(wareList) do
         local wareName = GetWareData(wareId, "name") or wareId
+        local isShown = menu.shownWares[wareId] == true
         row = leftTable:addRow("ware_" .. wareId, {})
-        row[1]:createCheckBox(menu.shownWares[wareId] == true, { height = Helper.standardTextHeight })
+        row[1]:createCheckBox(isShown, { height = Helper.standardTextHeight, active = isShown or allowMore })
         row[1].handlers.onClick = function (_, checked) return menu.checkboxWareToggled(wareId, checked) end
         row[2]:createText(wareName, { halign = "left" })
       end
@@ -260,12 +402,7 @@ function menu.createLeftPanel(x, width)
   end
 end
 
-function menu.createGraphPanel(x, width)
-  local now = C.GetCurrentGameTime()
-  local zoomStep   = config.zoomSteps[menu.xZoom]
-  local startTime  = math.max(0, now - (60 * zoomStep.zoom))
-  local xGranularity = zoomStep.granularity
-
+function menu.createGraphPanel(x, width, ctx)
   local graphHeight = math.floor(width * 9 / 16)
   local table_graph = menu.infoFrame:addTable(1, { tabOrder = 2, width = width, x = x, y = Helper.frameBorder })
 
@@ -275,53 +412,65 @@ function menu.createGraphPanel(x, width)
   menu.graph = row[1]:createGraph({ height = graphHeight, scaling = false })
     :setTitle(title, { font = Helper.titleFont, fontsize = Helper.scaleFont(Helper.titleFont, Helper.titleFontSize) })
 
-  local graphXScale = 60
-  local xUnitSuffix = "min"
-  if xGranularity >= (24 * 60 * 60) then
-    graphXScale = 24 * 3600
-    xUnitSuffix = "d"
-  elseif xGranularity >= (1 * 60 * 60) then
-    graphXScale = 3600
-    xUnitSuffix = "h"
-  end
-
-  local ctx = {
-    startTime    = startTime,
-    now          = now,
-    graphXScale  = graphXScale,
-    xRange       = (now - startTime) / graphXScale,
-    minY         = 0,
-    maxY         = 1,
-  }
-
+  -- Build every shown line's full-fidelity point list first, so we know the
+  -- total before deciding whether anything needs to be downsampled to stay
+  -- within the graph's shared point budget (config.maxTotalPoints, across all
+  -- lines combined -- not per line).
+  local lines = {}
   if menu.selectedIdcode ~= nil then
-    local wareList = swh.getWaresForStation(menu.selectedIdcode)
     for wareId in pairs(menu.shownWares) do
       local series = swh.getSeries(menu.selectedIdcode, wareId)
       if #series > 0 then
-        local color = colorForWare(wareList, wareId)
-        local datarecord = menu.graph:addDataRecord({
-          markertype  = config.point.type,
-          markersize  = config.point.size,
-          markercolor = color,
-          linetype    = config.line.type,
-          linewidth   = config.line.size,
-          linecolor   = color,
-          mouseOverText = GetWareData(wareId, "name") or wareId,
-        })
-        plotSeries(datarecord, series, ctx)
+        local points = buildPoints(series, ctx)
+        lines[#lines + 1] = { id = wareId, points = points, need = #points }
       end
     end
   end
 
-  local maxY = math.max(ctx.maxY, 1)
-  local granularity = math.max(1, Helper.round((maxY - ctx.minY) / 10))
+  local totalPoints = 0
+  for _, line in ipairs(lines) do
+    totalPoints = totalPoints + line.need
+  end
+
+  local caps = nil
+  if totalPoints > config.maxTotalPoints then
+    caps = fairShareCaps(lines, config.maxTotalPoints)
+    debugLog("createGraphPanel: %d point(s) across %d line(s) exceeds the %d budget, downsampling.",
+      totalPoints, #lines, config.maxTotalPoints)
+  end
+
+  local minY, maxY = 0, 1
+  local wareList = (menu.selectedIdcode ~= nil) and swh.getWaresForStation(menu.selectedIdcode) or {}
+  for _, line in ipairs(lines) do
+    local points = line.points
+    if caps ~= nil and #points > caps[line.id] then
+      points = decimatePoints(points, caps[line.id])
+    end
+    local color = colorForWare(wareList, line.id)
+    local datarecord = menu.graph:addDataRecord({
+      markertype  = config.point.type,
+      markersize  = config.point.size,
+      markercolor = color,
+      linetype    = config.line.type,
+      linewidth   = config.line.size,
+      linecolor   = color,
+      mouseOverText = GetWareData(line.id, "name") or line.id,
+    })
+    for _, p in ipairs(points) do
+      datarecord:addData(p.x, p.y, nil, nil)
+      minY = math.min(minY, p.y)
+      maxY = math.max(maxY, p.y)
+    end
+  end
+
+  maxY = math.max(maxY, 1)
+  local granularity = math.max(1, Helper.round((maxY - minY) / 10))
 
   local xRange = ctx.xRange
-  local xGran  = Helper.round(xGranularity / graphXScale, 3)
+  local xGran  = Helper.round(ctx.xGranularity / ctx.graphXScale, 3)
 
   menu.graph:setXAxis({ startvalue = -xRange, endvalue = 0, granularity = xGran, gridcolor = Color["graph_grid"] })
-  menu.graph:setXAxisLabel(ReadText(1001, 6519) .. " (" .. xUnitSuffix .. ")")
+  menu.graph:setXAxisLabel(ReadText(1001, 6519) .. " (" .. ctx.xUnitSuffix .. ")")
   local yUnitText = ReadText(1972092430, 1015)
   menu.graph:setYAxis({ startvalue = 0, endvalue = maxY, granularity = granularity, gridcolor = Color["graph_grid"] })
   menu.graph:setYAxisLabel(yUnitText)
